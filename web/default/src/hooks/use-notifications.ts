@@ -184,7 +184,7 @@ export function useNotifications() {
       browserNotificationKeyRef.current = browserNotificationKey
     }
 
-    if (noticeContent) {
+    if (nextTab === 'notice') {
       markNoticeRead(noticeContent)
     }
     if (nextTab === 'announcements') {
@@ -220,8 +220,7 @@ export function useNotifications() {
 
     requestBrowserNotificationPermission()
 
-    // Mark currently visible content as read when opening the notification center
-    if (noticeContent) {
+    if (nextTab === 'notice') {
       markNoticeRead(noticeContent)
     }
     if (nextTab === 'announcements') {

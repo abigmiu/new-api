@@ -269,6 +269,8 @@ export function PublicHeader(props: PublicHeaderProps) {
                   open={notifications.popoverOpen}
                   onOpenChange={notifications.setPopoverOpen}
                   unreadCount={notifications.unreadCount}
+                  unreadNoticeCount={notifications.unreadNoticeCount}
+                  unreadAnnouncementsCount={notifications.unreadAnnouncementsCount}
                   activeTab={notifications.activeTab}
                   onTabChange={notifications.setActiveTab}
                   notice={notifications.notice}

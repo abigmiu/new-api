@@ -61,6 +61,8 @@ interface NotificationPopoverProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   unreadCount: number
+  unreadNoticeCount: number
+  unreadAnnouncementsCount: number
   activeTab: 'notice' | 'announcements'
   onTabChange: (tab: 'notice' | 'announcements') => void
   notice: string
@@ -299,6 +301,8 @@ export function NotificationPopover({
   open,
   onOpenChange,
   unreadCount,
+  unreadNoticeCount,
+  unreadAnnouncementsCount,
   activeTab,
   onTabChange,
   notice,
@@ -350,10 +354,20 @@ export function NotificationPopover({
             <TabsTrigger value='notice' className='gap-1.5'>
               <Bell className='size-3.5' />
               {t('Notice')}
+              {unreadNoticeCount > 0 ? (
+                <Badge variant='destructive' className='h-4 min-w-4 px-1 text-[10px]'>
+                  {unreadNoticeCount}
+                </Badge>
+              ) : null}
             </TabsTrigger>
             <TabsTrigger value='announcements' className='gap-1.5'>
               <Megaphone className='size-3.5' />
               {t('Timeline')}
+              {unreadAnnouncementsCount > 0 ? (
+                <Badge variant='destructive' className='h-4 min-w-4 px-1 text-[10px]'>
+                  {unreadAnnouncementsCount > 99 ? '99+' : unreadAnnouncementsCount}
+                </Badge>
+              ) : null}
             </TabsTrigger>
           </TabsList>
 
