@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { api } from '@/lib/api'
 
-import type { CacheStats } from './types'
+import type { CacheEntriesResponse, CacheStats } from './types'
 
 export async function getCacheStats(): Promise<{
   success: boolean
@@ -47,6 +47,35 @@ export async function clearRuleCache(
   const res = await api.delete('/api/option/channel_affinity_cache', {
     params: { rule_name: ruleName },
   })
+  return res.data
+}
+
+export async function getCacheEntries(params: {
+  page: number
+  page_size: number
+  keyword?: string
+}): Promise<{ success: boolean; message?: string; data?: CacheEntriesResponse }> {
+  const res = await api.get('/api/option/channel_affinity_cache/entries', {
+    params,
+    disableDuplicate: true,
+  } as Record<string, unknown>)
+  return res.data
+}
+
+export async function updateCacheEntry(
+  id: string,
+  channelId: number
+): Promise<{ success: boolean; message?: string }> {
+  const res = await api.put(`/api/option/channel_affinity_cache/entries/${id}`, {
+    channel_id: channelId,
+  })
+  return res.data
+}
+
+export async function deleteCacheEntry(
+  id: string
+): Promise<{ success: boolean; message?: string }> {
+  const res = await api.delete(`/api/option/channel_affinity_cache/entries/${id}`)
   return res.data
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"hash/fnv"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/cachex"
 	"github.com/QuantumNous/new-api/setting/operation_setting"
 	"github.com/QuantumNous/new-api/types"
@@ -76,6 +78,21 @@ type ChannelAffinityCacheStats struct {
 	ByRuleName    map[string]int `json:"by_rule_name"`
 	CacheCapacity int            `json:"cache_capacity"`
 	CacheAlgo     string         `json:"cache_algo"`
+}
+
+type ChannelAffinityCacheEntry struct {
+	ID             string `json:"id"`
+	RuleName       string `json:"rule_name"`
+	ModelName      string `json:"model_name,omitempty"`
+	UsingGroup     string `json:"using_group,omitempty"`
+	KeyHint        string `json:"key_hint"`
+	KeyFingerprint string `json:"key_fp"`
+	ChannelID      int    `json:"channel_id"`
+}
+
+type ChannelAffinityCacheEntries struct {
+	Total int                         `json:"total"`
+	Items []ChannelAffinityCacheEntry `json:"items"`
 }
 
 func getChannelAffinityCache() *cachex.HybridCache[int] {
@@ -193,6 +210,154 @@ func GetChannelAffinityCacheStats() ChannelAffinityCacheStats {
 		CacheCapacity: mainCap,
 		CacheAlgo:     mainAlgo,
 	}
+}
+
+func parseChannelAffinityCacheEntry(key string, rules []operation_setting.ChannelAffinityRule) (ChannelAffinityCacheEntry, bool) {
+	prefix := channelAffinityCacheNamespace + ":"
+	if !strings.HasPrefix(key, prefix) {
+		return ChannelAffinityCacheEntry{}, false
+	}
+	suffix := strings.TrimPrefix(key, prefix)
+	for _, rule := range rules {
+		parts := strings.Split(suffix, ":")
+		index := 0
+		entry := ChannelAffinityCacheEntry{ID: common.Sha1([]byte(key)), RuleName: rule.Name}
+		if rule.IncludeRuleName {
+			if index >= len(parts) || parts[index] != rule.Name {
+				continue
+			}
+			index++
+		}
+		if rule.IncludeModelName {
+			if index >= len(parts) {
+				continue
+			}
+			entry.ModelName = parts[index]
+			index++
+		}
+		if rule.IncludeUsingGroup {
+			if index >= len(parts) {
+				continue
+			}
+			entry.UsingGroup = parts[index]
+			index++
+		}
+		if index >= len(parts) {
+			continue
+		}
+		affinityValue := strings.Join(parts[index:], ":")
+		entry.KeyHint = buildChannelAffinityKeyHint(affinityValue)
+		entry.KeyFingerprint = affinityFingerprint(affinityValue)
+		return entry, true
+	}
+	return ChannelAffinityCacheEntry{}, false
+}
+
+func ListChannelAffinityCacheEntries(page, pageSize int, keyword string) (ChannelAffinityCacheEntries, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+	setting := operation_setting.GetChannelAffinitySetting()
+	if setting == nil {
+		return ChannelAffinityCacheEntries{}, nil
+	}
+	keys, err := getChannelAffinityCache().Keys()
+	if err != nil {
+		return ChannelAffinityCacheEntries{}, err
+	}
+	keyword = strings.ToLower(strings.TrimSpace(keyword))
+	entries := make([]ChannelAffinityCacheEntry, 0, len(keys))
+	cache := getChannelAffinityCache()
+	for _, key := range keys {
+		entry, ok := parseChannelAffinityCacheEntry(key, setting.Rules)
+		if !ok {
+			continue
+		}
+		channelID, found, err := cache.Get(key)
+		if err != nil || !found {
+			continue
+		}
+		entry.ChannelID = channelID
+		searchable := strings.ToLower(strings.Join([]string{entry.RuleName, entry.ModelName, entry.UsingGroup, entry.KeyHint, entry.KeyFingerprint, strconv.Itoa(entry.ChannelID)}, " "))
+		if keyword != "" && !strings.Contains(searchable, keyword) {
+			continue
+		}
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].ID < entries[j].ID
+	})
+	total := len(entries)
+	start := (page - 1) * pageSize
+	if start >= total {
+		return ChannelAffinityCacheEntries{Total: total, Items: []ChannelAffinityCacheEntry{}}, nil
+	}
+	end := start + pageSize
+	if end > total {
+		end = total
+	}
+	return ChannelAffinityCacheEntries{Total: total, Items: entries[start:end]}, nil
+}
+
+func findChannelAffinityCacheKey(id string) (string, ChannelAffinityCacheEntry, error) {
+	keys, err := getChannelAffinityCache().Keys()
+	if err != nil {
+		return "", ChannelAffinityCacheEntry{}, err
+	}
+	for _, key := range keys {
+		entry, ok := parseChannelAffinityCacheEntry(key, operation_setting.GetChannelAffinitySetting().Rules)
+		if ok && entry.ID == id {
+			return key, entry, nil
+		}
+	}
+	return "", ChannelAffinityCacheEntry{}, fmt.Errorf("渠道亲和性缓存不存在或已过期")
+}
+
+func DeleteChannelAffinityCacheEntry(id string) error {
+	key, _, err := findChannelAffinityCacheKey(id)
+	if err != nil {
+		return err
+	}
+	_, err = getChannelAffinityCache().DeleteMany([]string{key})
+	return err
+}
+
+func UpdateChannelAffinityCacheEntry(id string, channelID int) error {
+	if channelID <= 0 {
+		return fmt.Errorf("channel_id 必须大于 0")
+	}
+	channel, err := model.CacheGetChannel(channelID)
+	if err != nil {
+		return err
+	}
+	if channel.Status != common.ChannelStatusEnabled {
+		return fmt.Errorf("渠道 #%d 未启用", channelID)
+	}
+	key, entry, err := findChannelAffinityCacheKey(id)
+	if err != nil {
+		return err
+	}
+	if entry.ModelName != "" && entry.UsingGroup != "" && !model.IsChannelEnabledForGroupModel(entry.UsingGroup, entry.ModelName, channelID) {
+		return fmt.Errorf("渠道 #%d 不支持分组 %s 的模型 %s", channelID, entry.UsingGroup, entry.ModelName)
+	}
+	setting := operation_setting.GetChannelAffinitySetting()
+	ttlSeconds := setting.DefaultTTLSeconds
+	for _, rule := range setting.Rules {
+		if rule.Name == entry.RuleName && rule.TTLSeconds > 0 {
+			ttlSeconds = rule.TTLSeconds
+			break
+		}
+	}
+	if ttlSeconds <= 0 {
+		ttlSeconds = 3600
+	}
+	return getChannelAffinityCache().SetWithTTL(key, channelID, time.Duration(ttlSeconds)*time.Second)
 }
 
 func ClearChannelAffinityCacheAll() int {

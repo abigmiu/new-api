@@ -44,6 +44,7 @@ import { useUpdateOption } from '../../hooks/use-update-option'
 import { getCacheStats, clearAllCache, clearRuleCache } from './api'
 import { RULE_TEMPLATES, cloneTemplate, makeUniqueName } from './constants'
 import { RuleEditorDialog } from './rule-editor-dialog'
+import { CacheEntriesPanel } from './cache-entries-panel'
 import type { AffinityRule, CacheStats, ChannelAffinitySettings } from './types'
 
 function parseRules(jsonStr: string): AffinityRule[] {
@@ -657,6 +658,17 @@ export function ChannelAffinitySection(props: Props) {
             />
           </div>
         )}
+
+        <Separator />
+
+        <div className='space-y-4'>
+          <div>
+            <h3 className='text-base font-semibold'>
+              {t('Channel Affinity Cache')}
+            </h3>
+          </div>
+          <CacheEntriesPanel onChanged={refreshCache} />
+        </div>
       </SettingsSection>
 
       <RuleEditorDialog

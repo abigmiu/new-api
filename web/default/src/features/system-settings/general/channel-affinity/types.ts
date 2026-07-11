@@ -47,6 +47,21 @@ export interface CacheStats {
   cache_algo: string
 }
 
+export interface CacheEntry {
+  id: string
+  rule_name: string
+  model_name?: string
+  using_group?: string
+  key_hint: string
+  key_fp: string
+  channel_id: number
+}
+
+export interface CacheEntriesResponse {
+  total: number
+  items: CacheEntry[]
+}
+
 export interface ChannelAffinitySettings {
   'channel_affinity_setting.enabled': boolean
   'channel_affinity_setting.switch_on_success': boolean

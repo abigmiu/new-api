@@ -191,6 +191,9 @@ func SetApiRouter(router *gin.Engine) {
 			optionRoute.PUT("/", controller.UpdateOption)
 			optionRoute.POST("/payment_compliance", controller.ConfirmPaymentCompliance)
 			optionRoute.GET("/channel_affinity_cache", controller.GetChannelAffinityCacheStats)
+			optionRoute.GET("/channel_affinity_cache/entries", controller.ListChannelAffinityCacheEntries)
+			optionRoute.PUT("/channel_affinity_cache/entries/:id", controller.UpdateChannelAffinityCacheEntry)
+			optionRoute.DELETE("/channel_affinity_cache/entries/:id", controller.DeleteChannelAffinityCacheEntry)
 			optionRoute.DELETE("/channel_affinity_cache", controller.ClearChannelAffinityCache)
 			optionRoute.POST("/rest_model_ratio", controller.ResetModelRatio)
 			optionRoute.POST("/migrate_console_setting", controller.MigrateConsoleSetting) // 用于迁移检测的旧键，下个版本会删除

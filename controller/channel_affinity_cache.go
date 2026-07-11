@@ -2,11 +2,16 @@ package controller
 
 import (
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/service"
 	"github.com/gin-gonic/gin"
 )
+
+type updateChannelAffinityCacheEntryRequest struct {
+	ChannelID int `json:"channel_id"`
+}
 
 func GetChannelAffinityCacheStats(c *gin.Context) {
 	stats := service.GetChannelAffinityCacheStats()
@@ -15,6 +20,46 @@ func GetChannelAffinityCacheStats(c *gin.Context) {
 		"message": "",
 		"data":    stats,
 	})
+}
+
+func ListChannelAffinityCacheEntries(c *gin.Context) {
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page < 1 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid page"})
+		return
+	}
+	pageSize, err := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if err != nil || pageSize < 1 || pageSize > 100 {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid page_size"})
+		return
+	}
+	entries, err := service.ListChannelAffinityCacheEntries(page, pageSize, c.Query("keyword"))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": "", "data": entries})
+}
+
+func DeleteChannelAffinityCacheEntry(c *gin.Context) {
+	if err := service.DeleteChannelAffinityCacheEntry(c.Param("id")); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
+}
+
+func UpdateChannelAffinityCacheEntry(c *gin.Context) {
+	var request updateChannelAffinityCacheEntryRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid request"})
+		return
+	}
+	if err := service.UpdateChannelAffinityCacheEntry(c.Param("id"), request.ChannelID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "message": ""})
 }
 
 func ClearChannelAffinityCache(c *gin.Context) {
