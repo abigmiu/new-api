@@ -17,7 +17,8 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { useState, useMemo } from 'react'
+import { t } from 'i18next'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
@@ -58,6 +59,32 @@ function getAnnouncementKey(item: Record<string, unknown>): string {
   return `hash:${hashString(fingerprint)}`
 }
 
+function isBrowserNotificationSupported(): boolean {
+  return typeof window !== 'undefined' && 'Notification' in window
+}
+
+function requestBrowserNotificationPermission() {
+  if (
+    !isBrowserNotificationSupported() ||
+    window.Notification.permission !== 'default'
+  ) {
+    return
+  }
+
+  void window.Notification.requestPermission()
+}
+
+function showBrowserNotification(title: string, body: string) {
+  if (
+    !isBrowserNotificationSupported() ||
+    window.Notification.permission !== 'granted'
+  ) {
+    return
+  }
+
+  new window.Notification(title, { body })
+}
+
 /**
  * Hook to manage notifications (Notice + Announcements)
  * Provides unread counts and read status management
@@ -67,6 +94,7 @@ export function useNotifications() {
   const [activeTab, setActiveTab] = useState<'notice' | 'announcements'>(
     'notice'
   )
+  const browserNotificationKeyRef = useRef<string>('')
 
   // Fetch Notice from API
   const {
@@ -77,15 +105,20 @@ export function useNotifications() {
     queryKey: ['notice'],
     queryFn: getNotice,
     staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchInterval: 1000 * 60 * 5,
   })
 
   // Fetch Announcements from status
   const { status, loading: statusLoading } = useStatus()
   const announcementsEnabled = status?.announcements_enabled ?? false
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const announcements: Record<string, unknown>[] = announcementsEnabled
-    ? ((status?.announcements || []) as Record<string, unknown>[]).slice(0, 20)
-    : []
+  const announcements = useMemo(() => {
+    if (!announcementsEnabled) return []
+
+    return ((status?.announcements || []) as Record<string, unknown>[]).slice(
+      0,
+      20
+    )
+  }, [announcementsEnabled, status?.announcements])
 
   // Notification store
   const {
@@ -119,6 +152,59 @@ export function useNotifications() {
     }
   }, [noticeContent, lastReadNotice, announcements, isAnnouncementRead])
 
+  useEffect(() => {
+    if (
+      popoverOpen ||
+      noticeLoading ||
+      statusLoading ||
+      unreadCounts.total === 0
+    ) {
+      return
+    }
+
+    const nextTab = unreadCounts.notice > 0 ? 'notice' : 'announcements'
+    const unreadAnnouncements = announcements.filter(
+      (item: Record<string, unknown>) =>
+        !isAnnouncementRead(getAnnouncementKey(item))
+    )
+    const unreadAnnouncementKeys = unreadAnnouncements.map(
+      (item: Record<string, unknown>) => getAnnouncementKey(item)
+    )
+    const browserNotificationKey =
+      nextTab === 'notice'
+        ? `notice:${hashString(noticeContent)}`
+        : `announcements:${unreadAnnouncementKeys.join(',')}`
+    const browserNotificationBody =
+      nextTab === 'notice'
+        ? noticeContent
+        : String(unreadAnnouncements[0]?.content ?? '').trim()
+
+    if (browserNotificationKeyRef.current !== browserNotificationKey) {
+      showBrowserNotification(t('System Announcements'), browserNotificationBody)
+      browserNotificationKeyRef.current = browserNotificationKey
+    }
+
+    if (noticeContent) {
+      markNoticeRead(noticeContent)
+    }
+    if (nextTab === 'announcements') {
+      markAnnouncementsRead(unreadAnnouncementKeys)
+    }
+
+    setActiveTab(nextTab)
+    setPopoverOpen(true)
+  }, [
+    noticeLoading,
+    statusLoading,
+    popoverOpen,
+    unreadCounts,
+    noticeContent,
+    announcements,
+    isAnnouncementRead,
+    markNoticeRead,
+    markAnnouncementsRead,
+  ])
+
   const markAnnouncementsAsRead = () => {
     if (announcements.length > 0) {
       const allKeys = announcements.map((item: Record<string, unknown>) =>
@@ -131,6 +217,8 @@ export function useNotifications() {
   // Handle popover open
   const handleOpenPopover = (tab?: 'notice' | 'announcements') => {
     const nextTab = tab || activeTab
+
+    requestBrowserNotificationPermission()
 
     // Mark currently visible content as read when opening the notification center
     if (noticeContent) {
