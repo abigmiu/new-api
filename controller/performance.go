@@ -1,7 +1,9 @@
 package controller
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -193,6 +195,20 @@ type LogFilesResponse struct {
 	Files      []LogFileInfo `json:"files"`
 }
 
+// RuntimeLogLine 当前运行日志行
+type RuntimeLogLine struct {
+	Offset int    `json:"offset"`
+	Line   string `json:"line"`
+}
+
+// RuntimeLogsResponse 当前运行日志响应
+type RuntimeLogsResponse struct {
+	Enabled bool             `json:"enabled"`
+	Path    string           `json:"path,omitempty"`
+	Total   int              `json:"total"`
+	Lines   []RuntimeLogLine `json:"lines"`
+}
+
 // getLogFiles 读取日志目录中的日志文件列表
 func getLogFiles() ([]LogFileInfo, error) {
 	if *common.LogDir == "" {
@@ -262,6 +278,123 @@ func GetLogFiles(c *gin.Context) {
 		resp.NewestTime = &newest
 	}
 	common.ApiSuccess(c, resp)
+}
+
+// GetRuntimeLogs 获取当前实例运行日志
+func GetRuntimeLogs(c *gin.Context) {
+	logPath := logger.GetCurrentLogPath()
+	if *common.LogDir == "" || logPath == "" {
+		common.ApiSuccess(c, RuntimeLogsResponse{Enabled: false})
+		return
+	}
+
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "200"))
+	if err != nil || limit < 1 {
+		common.ApiErrorMsg(c, "invalid limit")
+		return
+	}
+	if limit > 500 {
+		limit = 500
+	}
+
+	cursor := -1
+	if cursorStr := c.Query("cursor"); cursorStr != "" {
+		cursor, err = strconv.Atoi(cursorStr)
+		if err != nil || cursor < 0 {
+			common.ApiErrorMsg(c, "invalid cursor")
+			return
+		}
+	}
+
+	level := strings.ToUpper(strings.TrimSpace(c.Query("level")))
+	if level != "" && level != "INFO" && level != "WARN" && level != "ERR" && level != "FRONTEND_ERROR" {
+		common.ApiErrorMsg(c, "invalid level")
+		return
+	}
+	keyword := strings.TrimSpace(c.Query("keyword"))
+	if len(keyword) > 120 {
+		common.ApiErrorMsg(c, "keyword too long")
+		return
+	}
+	keywordLower := strings.ToLower(keyword)
+
+	file, err := os.Open(logPath)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	defer file.Close()
+
+	const maxRuntimeLogReadBytes int64 = 10 * 1024 * 1024
+	info, err := file.Stat()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	readOffset := info.Size() - maxRuntimeLogReadBytes
+	if readOffset < 0 {
+		readOffset = 0
+	}
+	if readOffset > 0 {
+		if _, err := file.Seek(readOffset, io.SeekStart); err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	} else if _, err := file.Seek(0, io.SeekStart); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	reader := bufio.NewReader(io.LimitReader(file, maxRuntimeLogReadBytes))
+	if readOffset > 0 {
+		_, _ = reader.ReadString('\n')
+	}
+
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), 256*1024)
+	var matched []RuntimeLogLine
+	lineNumber := 0
+	for scanner.Scan() {
+		line := scanner.Text()
+		if cursor >= 0 && lineNumber >= cursor {
+			break
+		}
+		if level != "" {
+			if level == "FRONTEND_ERROR" {
+				if !strings.Contains(line, "[FRONTEND_ERROR]") {
+					lineNumber++
+					continue
+				}
+			} else if !strings.HasPrefix(line, "["+level+"]") {
+				lineNumber++
+				continue
+			}
+		}
+		if keywordLower != "" && !strings.Contains(strings.ToLower(line), keywordLower) {
+			lineNumber++
+			continue
+		}
+		matched = append(matched, RuntimeLogLine{Offset: lineNumber, Line: line})
+		lineNumber++
+	}
+	if err := scanner.Err(); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+
+	scanned := lineNumber
+	sort.Slice(matched, func(i, j int) bool {
+		return matched[i].Offset > matched[j].Offset
+	})
+	if len(matched) > limit {
+		matched = matched[:limit]
+	}
+
+	common.ApiSuccess(c, RuntimeLogsResponse{
+		Enabled: true,
+		Path:    logPath,
+		Total:   scanned,
+		Lines:   matched,
+	})
 }
 
 // CleanupLogFiles 清理过期日志文件

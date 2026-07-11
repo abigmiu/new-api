@@ -20,6 +20,7 @@ import axios, { type AxiosRequestConfig } from 'axios'
 import { t } from 'i18next'
 import { toast } from 'sonner'
 
+import { reportFrontendError } from '@/lib/frontend-error-reporting'
 import { useAuthStore } from '@/stores/auth-store'
 
 declare module 'axios' {
@@ -65,7 +66,8 @@ api.get = ((url: string, config: ApiRequestConfig = {}) => {
   const key = `${url}?${params}`
 
   // Return existing in-flight request if available
-  if (inFlightGet.has(key)) return inFlightGet.get(key)!
+  const existingRequest = inFlightGet.get(key)
+  if (existingRequest) return existingRequest
 
   // Create new request and clean up after completion
   const req = originalGet(url, config).finally(() => inFlightGet.delete(key))
@@ -110,6 +112,20 @@ api.interceptors.response.use(
 
       if (!skip) {
         toast.error(t('Session expired!'))
+      }
+    } else if (status === 500) {
+      reportFrontendError({
+        type: 'http_500',
+        message:
+          error?.response?.data?.message || error?.message || 'HTTP 500 error',
+        stack: error?.stack,
+        source: error?.config?.url,
+      })
+
+      if (!skip) {
+        toast.error(t('Server request failed'), {
+          description: t('The server hit a temporary error. Please try again later.'),
+        })
       }
     } else if (!skip) {
       // Other errors: show error message from response or default

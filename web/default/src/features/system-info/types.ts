@@ -85,3 +85,19 @@ export type SystemInstanceDeleteResponse = {
     deleted_count: number
   }
 }
+
+export type RuntimeLogLine = {
+  offset: number
+  line: string
+}
+
+export type RuntimeLogsResponse = {
+  success: boolean
+  message: string
+  data?: {
+    enabled: boolean
+    path?: string
+    total: number
+    lines: RuntimeLogLine[]
+  }
+}

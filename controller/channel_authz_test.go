@@ -158,6 +158,29 @@ func TestChannelStatusValidation(t *testing.T) {
 	assert.False(t, isManageableChannelStatus(0))
 }
 
+func TestValidateChannelRetryTimes(t *testing.T) {
+	for _, testCase := range []struct {
+		name       string
+		retryTimes int
+		wantError  bool
+	}{
+		{name: "minimum", retryTimes: 0},
+		{name: "maximum", retryTimes: 10},
+		{name: "below minimum", retryTimes: -1, wantError: true},
+		{name: "above maximum", retryTimes: 11, wantError: true},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			channel := &model.Channel{RetryTimes: testCase.retryTimes}
+			err := validateChannel(channel, false)
+			if testCase.wantError {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
+
 // TestChannelFieldsAreClassified guards the fail-closed sensitivity check: every
 // JSON field of PatchChannel (including the embedded model.Channel) must be listed
 // in channelSensitiveFields, channelNonSensitiveFields, or

@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { StatusBadge } from '@/components/status-badge'
 
+import { RuntimeLogsPanel } from './components/runtime-logs-panel'
 import { SystemInstancesPanel } from './components/system-instances-panel'
 import { SystemTasksPanel } from './components/system-tasks-panel'
 
@@ -41,6 +42,7 @@ export function SystemInfo() {
         <div className='space-y-4'>
           <SystemInstancesPanel />
           <SystemTasksPanel />
+          <RuntimeLogsPanel />
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>

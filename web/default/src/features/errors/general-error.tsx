@@ -17,9 +17,11 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useNavigate, useRouter } from '@tanstack/react-router'
+import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/design-system/button'
+import { reportFrontendError } from '@/lib/frontend-error-reporting'
 import { cn } from '@/lib/utils'
 
 const FEEDBACK_URL = 'https://github.com/QuantumNous/new-api/issues'
@@ -54,11 +56,21 @@ export function GeneralError({
     ? t('Please wait a moment before trying again.')
     : t('Please try again later.')
 
+  useEffect(() => {
+    if (!error) return
+    reportFrontendError({
+      type: 'router_error',
+      message: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      source: 'router',
+    })
+  }, [error])
+
   return (
     <div className={cn('h-svh w-full', className)}>
       <div className='m-auto flex h-full w-full flex-col items-center justify-center gap-2'>
         {!minimal && (
-          <h1 className='text-[7rem] leading-tight font-bold'>
+          <h1 className='text-2xl leading-tight font-semibold'>
             {status ?? 500}
           </h1>
         )}

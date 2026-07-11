@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { api } from '@/lib/api'
 
 import type {
+  RuntimeLogsResponse,
   SystemInstanceDeleteResponse,
   SystemInstanceListResponse,
 } from './types'
@@ -41,5 +42,17 @@ export async function deleteStaleSystemInstance(nodeName: string) {
   const res = await api.delete<SystemInstanceDeleteResponse>(
     `/api/system-info/instances/${encodeURIComponent(nodeName)}`
   )
+  return res.data
+}
+
+export async function getRuntimeLogs(params: {
+  cursor?: number
+  level?: string
+  keyword?: string
+  limit?: number
+}) {
+  const res = await api.get<RuntimeLogsResponse>('/api/performance/runtime-logs', {
+    params,
+  })
   return res.data
 }
