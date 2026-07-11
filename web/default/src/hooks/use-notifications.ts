@@ -17,8 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { t } from 'i18next'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
@@ -59,32 +58,6 @@ function getAnnouncementKey(item: Record<string, unknown>): string {
   return `hash:${hashString(fingerprint)}`
 }
 
-function isBrowserNotificationSupported(): boolean {
-  return typeof window !== 'undefined' && 'Notification' in window
-}
-
-function requestBrowserNotificationPermission() {
-  if (
-    !isBrowserNotificationSupported() ||
-    window.Notification.permission !== 'default'
-  ) {
-    return
-  }
-
-  void window.Notification.requestPermission()
-}
-
-function showBrowserNotification(title: string, body: string) {
-  if (
-    !isBrowserNotificationSupported() ||
-    window.Notification.permission !== 'granted'
-  ) {
-    return
-  }
-
-  new window.Notification(title, { body })
-}
-
 /**
  * Hook to manage notifications (Notice + Announcements)
  * Provides unread counts and read status management
@@ -94,7 +67,6 @@ export function useNotifications() {
   const [activeTab, setActiveTab] = useState<'notice' | 'announcements'>(
     'notice'
   )
-  const browserNotificationKeyRef = useRef<string>('')
 
   // Fetch Notice from API
   const {
@@ -170,20 +142,6 @@ export function useNotifications() {
     const unreadAnnouncementKeys = unreadAnnouncements.map(
       (item: Record<string, unknown>) => getAnnouncementKey(item)
     )
-    const browserNotificationKey =
-      nextTab === 'notice'
-        ? `notice:${hashString(noticeContent)}`
-        : `announcements:${unreadAnnouncementKeys.join(',')}`
-    const browserNotificationBody =
-      nextTab === 'notice'
-        ? noticeContent
-        : String(unreadAnnouncements[0]?.content ?? '').trim()
-
-    if (browserNotificationKeyRef.current !== browserNotificationKey) {
-      showBrowserNotification(t('System Announcements'), browserNotificationBody)
-      browserNotificationKeyRef.current = browserNotificationKey
-    }
-
     if (nextTab === 'notice') {
       markNoticeRead(noticeContent)
     }
@@ -217,8 +175,6 @@ export function useNotifications() {
   // Handle popover open
   const handleOpenPopover = (tab?: 'notice' | 'announcements') => {
     const nextTab = tab || activeTab
-
-    requestBrowserNotificationPermission()
 
     if (nextTab === 'notice') {
       markNoticeRead(noticeContent)
