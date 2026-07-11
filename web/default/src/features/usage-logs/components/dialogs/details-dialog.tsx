@@ -541,6 +541,8 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const useChannel = other?.admin_info?.use_channel
   const channelChain =
     useChannel && useChannel.length > 0 ? useChannel.join(' → ') : undefined
+  const channelAffinity =
+    props.isAdmin ? other?.admin_info?.channel_affinity : undefined
 
   return (
     <Dialog
@@ -701,6 +703,66 @@ export function DetailsDialog(props: DetailsDialogProps) {
                 </div>
               </div>
             </div>
+          </DetailSection>
+        )}
+
+        {channelAffinity && (
+          <DetailSection
+            icon={<Settings2 className='size-3.5' aria-hidden='true' />}
+            label={t('Channel Affinity')}
+          >
+            {channelAffinity.rule_name && (
+              <DetailRow
+                label={t('Rule')}
+                value={channelAffinity.rule_name}
+              />
+            )}
+            {(channelAffinity.selected_group || channelAffinity.using_group) && (
+              <DetailRow
+                label={t('Group')}
+                value={
+                  channelAffinity.selected_group ||
+                  channelAffinity.using_group ||
+                  ''
+                }
+                mono
+              />
+            )}
+            {channelAffinity.key_source && (
+              <DetailRow
+                label={t('Key Source')}
+                value={channelAffinity.key_source}
+                mono
+              />
+            )}
+            {channelAffinity.key_path && (
+              <DetailRow
+                label={t('Key Path')}
+                value={channelAffinity.key_path}
+                mono
+              />
+            )}
+            {channelAffinity.key_key && (
+              <DetailRow
+                label={t('Key Name')}
+                value={channelAffinity.key_key}
+                mono
+              />
+            )}
+            {channelAffinity.key_hint && (
+              <DetailRow
+                label={t('Key Summary')}
+                value={channelAffinity.key_hint}
+                mono
+              />
+            )}
+            {channelAffinity.key_fp && (
+              <DetailRow
+                label={t('Key Fingerprint')}
+                value={channelAffinity.key_fp}
+                mono
+              />
+            )}
           </DetailSection>
         )}
 
