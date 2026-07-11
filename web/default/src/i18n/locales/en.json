@@ -4988,6 +4988,7 @@
     "Wallet Management": "Wallet Management",
     "Wallet management and personal preferences.": "Wallet management and personal preferences.",
     "Wallet Only": "Wallet Only",
+    "Wallet, Top up": "Wallet, Top up",
     "Warning": "Warning",
     "Warning: Base URL should not end with /v1. New API will handle it automatically. This may cause request failures.": "Warning: Base URL should not end with /v1. New API will handle it automatically. This may cause request failures.",
     "Warning: Disabling 2FA will make your account less secure.": "Warning: Disabling 2FA will make your account less secure.",

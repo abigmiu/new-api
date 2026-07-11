@@ -460,18 +460,22 @@ export function RechargeFormCard({
             </Button>
           </div>
           {topupLink && (
-            <p className='text-muted-foreground text-xs'>
-              {t('Need a redemption code?')}{' '}
-              <a
-                href={topupLink}
-                target='_blank'
-                rel='noopener noreferrer'
-                className='inline-flex items-center gap-1 underline-offset-4 hover:underline'
-              >
-                {t('Get one here')}
-                <ExternalLink className='size-3' />
-              </a>
-            </p>
+            <a
+              href={topupLink}
+              target='_blank'
+              rel='noopener noreferrer'
+              className='bg-warning text-red-600 hover:bg-warning/90 focus-visible:ring-warning flex min-h-16 w-full items-center justify-between gap-3 rounded-lg border border-warning/70 px-4 py-3 text-left text-base shadow-sm transition-colors focus-visible:ring-2 focus-visible:outline-none'
+            >
+              <span className='flex min-w-0 flex-col gap-0.5'>
+                <span className='font-medium opacity-90'>
+                  {t('Need a redemption code?')}
+                </span>
+                <span className='font-semibold'>
+                  {t('Get one here')}
+                </span>
+              </span>
+              <ExternalLink className='size-5 shrink-0' />
+            </a>
           )}
         </div>
       ) : (

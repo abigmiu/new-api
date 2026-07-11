@@ -4988,6 +4988,7 @@
     "Wallet Management": "Управление кошельком",
     "Wallet management and personal preferences.": "Управление кошельком и личные предпочтения.",
     "Wallet Only": "Только кошелёк",
+    "Wallet, Top up": "Кошелек, пополнение",
     "Warning": "Предупреждение",
     "Warning: Base URL should not end with /v1. New API will handle it automatically. This may cause request failures.": "Предупреждение: базовый URL не должен заканчиваться на /v1. Новый API обработает это автоматически. Это может привести к сбоям запросов.",
     "Warning: Disabling 2FA will make your account less secure.": "Внимание: Отключение 2FA сделает вашу учетную запись менее безопасной.",
