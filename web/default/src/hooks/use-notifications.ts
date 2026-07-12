@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useStatus } from '@/hooks/use-status'
 import { getNotice } from '@/lib/api'
@@ -123,45 +123,6 @@ export function useNotifications() {
       total: noticeUnread + announcementsUnread,
     }
   }, [noticeContent, lastReadNotice, announcements, isAnnouncementRead])
-
-  useEffect(() => {
-    if (
-      popoverOpen ||
-      noticeLoading ||
-      statusLoading ||
-      unreadCounts.total === 0
-    ) {
-      return
-    }
-
-    const nextTab = unreadCounts.notice > 0 ? 'notice' : 'announcements'
-    const unreadAnnouncements = announcements.filter(
-      (item: Record<string, unknown>) =>
-        !isAnnouncementRead(getAnnouncementKey(item))
-    )
-    const unreadAnnouncementKeys = unreadAnnouncements.map(
-      (item: Record<string, unknown>) => getAnnouncementKey(item)
-    )
-    if (nextTab === 'notice') {
-      markNoticeRead(noticeContent)
-    }
-    if (nextTab === 'announcements') {
-      markAnnouncementsRead(unreadAnnouncementKeys)
-    }
-
-    setActiveTab(nextTab)
-    setPopoverOpen(true)
-  }, [
-    noticeLoading,
-    statusLoading,
-    popoverOpen,
-    unreadCounts,
-    noticeContent,
-    announcements,
-    isAnnouncementRead,
-    markNoticeRead,
-    markAnnouncementsRead,
-  ])
 
   const markAnnouncementsAsRead = () => {
     if (announcements.length > 0) {
