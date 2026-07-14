@@ -58,6 +58,7 @@ import {
   SettingsSwitchItem,
 } from '../components/settings-form-layout'
 import { SettingsPageActionsPortal } from '../components/settings-page-context'
+import type { GroupRenameItem } from '../types'
 import { safeJsonParse } from '../utils/json-parser'
 import { GroupRatioVisualEditor } from './group-ratio-visual-editor'
 import { GroupSpecialUsableRulesEditor } from './group-special-usable-editor'
@@ -76,12 +77,14 @@ type GroupRatioFormProps = {
   form: UseFormReturn<GroupFormValues>
   onSave: (values: GroupFormValues) => Promise<void>
   isSaving: boolean
+  onRenamesChange: (renames: GroupRenameItem[]) => void
 }
 
 export const GroupRatioForm = memo(function GroupRatioForm({
   form,
   onSave,
   isSaving,
+  onRenamesChange,
 }: GroupRatioFormProps) {
   const { t } = useTranslation()
   const [editMode, setEditMode] = useState<'visual' | 'json'>('visual')
@@ -172,6 +175,7 @@ export const GroupRatioForm = memo(function GroupRatioForm({
               onChange={(field, value) =>
                 handleFieldChange(field as keyof GroupFormValues, value)
               }
+              onRenamesChange={onRenamesChange}
             />
 
             <GroupSpecialUsableRulesEditor

@@ -32,10 +32,11 @@ import {
   TabsTrigger,
 } from '@/components/design-system/tabs'
 
-import { resetModelRatios } from '../api'
+import { renameGroups, resetModelRatios } from '../api'
 import { SettingsPageTitleStatusPortal } from '../components/settings-page-context'
 import { SettingsSection } from '../components/settings-section'
 import { useUpdateOption } from '../hooks/use-update-option'
+import type { GroupRenameItem } from '../types'
 import { GroupRatioForm } from './group-ratio-form'
 import { ModelRatioForm } from './model-ratio-form'
 import { ToolPriceSettings } from './tool-price-settings'
@@ -162,6 +163,8 @@ export function RatioSettingsCard({
   const updateOption = useUpdateOption()
   const queryClient = useQueryClient()
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [isGroupSaving, setIsGroupSaving] = useState(false)
+  const pendingGroupRenames = useRef<GroupRenameItem[]>([])
 
   const resetMutation = useMutation({
     mutationFn: resetModelRatios,
@@ -354,6 +357,7 @@ export function RatioSettingsCard({
 
   const saveGroupRatios = useCallback(
     async (values: GroupFormValues) => {
+      setIsGroupSaving(true)
       const normalized = {
         GroupRatio: normalizeJsonString(values.GroupRatio),
         TopupGroupRatio: normalizeJsonString(values.TopupGroupRatio),
@@ -364,6 +368,57 @@ export function RatioSettingsCard({
         GroupSpecialUsableGroup: normalizeJsonString(
           values.GroupSpecialUsableGroup
         ),
+      }
+
+      if (pendingGroupRenames.current.length > 0) {
+        const renames = new Map(
+          pendingGroupRenames.current.map((item) => [
+            item.old_name,
+            item.new_name,
+          ])
+        )
+        const groupGroupRatio = JSON.parse(
+          normalized.GroupGroupRatio
+        ) as Record<string, Record<string, number>>
+        const renamedGroupGroupRatio: Record<
+          string,
+          Record<string, number>
+        > = {}
+        for (const [userGroup, ratios] of Object.entries(groupGroupRatio)) {
+          const renamedRatios: Record<string, number> = {}
+          for (const [group, ratio] of Object.entries(ratios)) {
+            renamedRatios[renames.get(group) ?? group] = ratio
+          }
+          renamedGroupGroupRatio[renames.get(userGroup) ?? userGroup] =
+            renamedRatios
+        }
+        normalized.GroupGroupRatio = JSON.stringify(renamedGroupGroupRatio)
+
+        const autoGroups = JSON.parse(normalized.AutoGroups) as string[]
+        normalized.AutoGroups = JSON.stringify(
+          autoGroups.map((group) => renames.get(group) ?? group)
+        )
+
+        const specialGroups = JSON.parse(
+          normalized.GroupSpecialUsableGroup
+        ) as Record<string, Record<string, string>>
+        const renamedSpecialGroups: Record<string, Record<string, string>> = {}
+        for (const [userGroup, groups] of Object.entries(specialGroups)) {
+          const renamedGroups: Record<string, string> = {}
+          for (const [rawGroup, description] of Object.entries(groups)) {
+            const prefix =
+              rawGroup.startsWith('+:') || rawGroup.startsWith('-:')
+                ? rawGroup.slice(0, 2)
+                : ''
+            const group = prefix ? rawGroup.slice(2) : rawGroup
+            renamedGroups[`${prefix}${renames.get(group) ?? group}`] =
+              description
+          }
+          renamedSpecialGroups[renames.get(userGroup) ?? userGroup] =
+            renamedGroups
+        }
+        normalized.GroupSpecialUsableGroup =
+          JSON.stringify(renamedSpecialGroups)
       }
 
       // Map form field names to API keys (most are 1:1, except GroupSpecialUsableGroup)
@@ -378,12 +433,32 @@ export function RatioSettingsCard({
         (key) => normalized[key] !== groupNormalizedDefaults.current[key]
       )
 
-      for (const key of updates) {
-        const apiKey = apiKeyMap[key] || key
-        await updateOption.mutateAsync({ key: apiKey, value: normalized[key] })
+      try {
+        if (pendingGroupRenames.current.length > 0) {
+          const result = await renameGroups(pendingGroupRenames.current)
+          if (!result.success) {
+            throw new Error(result.message || t('Failed to update setting'))
+          }
+        }
+
+        for (const key of updates) {
+          const apiKey = apiKeyMap[key] || key
+          await updateOption.mutateAsync({
+            key: apiKey,
+            value: normalized[key],
+          })
+        }
+        pendingGroupRenames.current = []
+        await queryClient.invalidateQueries({ queryKey: ['system-options'] })
+      } catch (error) {
+        toast.error(
+          error instanceof Error ? error.message : t('Failed to update setting')
+        )
+      } finally {
+        setIsGroupSaving(false)
       }
     },
-    [updateOption]
+    [queryClient, t, updateOption]
   )
 
   const handleResetRatios = useCallback(() => {
@@ -428,7 +503,10 @@ export function RatioSettingsCard({
         <GroupRatioForm
           form={groupForm}
           onSave={saveGroupRatios}
-          isSaving={updateOption.isPending}
+          isSaving={isGroupSaving || updateOption.isPending}
+          onRenamesChange={(renames) => {
+            pendingGroupRenames.current = renames
+          }}
         />
       )
     }

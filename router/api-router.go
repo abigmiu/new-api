@@ -312,6 +312,7 @@ func SetApiRouter(router *gin.Engine) {
 		groupRoute.Use(middleware.AdminAuth())
 		{
 			groupRoute.GET("/", controller.GetGroups)
+			groupRoute.PUT("/rename", controller.RenameGroups)
 		}
 
 		prefillGroupRoute := apiRouter.Group("/prefill_group")

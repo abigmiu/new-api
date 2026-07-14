@@ -34,6 +34,11 @@ export type UpdateOptionRequest = {
   value: string | boolean | number
 }
 
+export type GroupRenameItem = {
+  old_name: string
+  new_name: string
+}
+
 export type UpdateOptionResponse = {
   success: boolean
   message: string

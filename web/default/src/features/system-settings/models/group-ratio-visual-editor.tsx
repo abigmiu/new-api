@@ -68,6 +68,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 
+import type { GroupRenameItem } from '../types'
 import { safeJsonParse } from '../utils/json-parser'
 
 type GroupRatioVisualEditorProps = {
@@ -78,6 +79,7 @@ type GroupRatioVisualEditorProps = {
   autoGroups: string
   groupSpecialUsableGroup: string
   onChange: (field: string, value: string) => void
+  onRenamesChange: (renames: GroupRenameItem[]) => void
 }
 
 type GroupPricingRow = {
@@ -87,6 +89,7 @@ type GroupPricingRow = {
   topupRatio: string
   selectable: boolean
   description: string
+  originalName: string | null
 }
 
 type RegistryEntry = {
@@ -153,6 +156,7 @@ function buildGroupPricingRows(
     topupRatio: Object.hasOwn(topupMap, name) ? String(topupMap[name]) : '',
     selectable: Object.hasOwn(usableMap, name),
     description: String(usableMap[name] ?? ''),
+    originalName: name,
   }))
 }
 
@@ -259,6 +263,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
   autoGroups,
   groupSpecialUsableGroup,
   onChange,
+  onRenamesChange,
 }: GroupRatioVisualEditorProps) {
   const { t } = useTranslation()
   const [detailGroup, setDetailGroup] = useState<string | null>(null)
@@ -330,6 +335,7 @@ export const GroupRatioVisualEditor = memo(function GroupRatioVisualEditor({
         userUsableGroups={userUsableGroups}
         topupGroupRatio={topupGroupRatio}
         onChange={onChange}
+        onRenamesChange={onRenamesChange}
         onShowDetail={setDetailGroup}
       />
 
@@ -419,6 +425,7 @@ type GroupPricingTableProps = {
   topupGroupRatio: string
   onChange: (field: string, value: string) => void
   onShowDetail: (name: string) => void
+  onRenamesChange: (renames: GroupRenameItem[]) => void
 }
 
 function GroupPricingTable({
@@ -427,6 +434,7 @@ function GroupPricingTable({
   topupGroupRatio,
   onChange,
   onShowDetail,
+  onRenamesChange,
 }: GroupPricingTableProps) {
   const { t } = useTranslation()
   const [rows, setRows] = useState<GroupPricingRow[]>(() =>
@@ -458,8 +466,19 @@ function GroupPricingTable({
       onChange('GroupRatio', serialized.GroupRatio)
       onChange('UserUsableGroups', serialized.UserUsableGroups)
       onChange('TopupGroupRatio', serialized.TopupGroupRatio)
+      onRenamesChange(
+        nextRows
+          .filter(
+            (row) =>
+              row.originalName !== null && row.originalName !== row.name.trim()
+          )
+          .map((row) => ({
+            old_name: row.originalName as string,
+            new_name: row.name.trim(),
+          }))
+      )
     },
-    [onChange]
+    [onChange, onRenamesChange]
   )
 
   const updateRow = useCallback(
@@ -492,6 +511,7 @@ function GroupPricingTable({
         topupRatio: '',
         selectable: true,
         description: '',
+        originalName: null,
       },
     ])
   }, [emitRows, rows])
