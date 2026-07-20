@@ -263,8 +263,12 @@ func StreamScannerHandler(c *gin.Context, resp *http.Response, info *relaycommon
 				continue
 			}
 			if !strings.HasPrefix(data, "[DONE]") {
+				isFirstEvent := info.ReceivedResponseCount == 0
 				info.SetFirstResponseTime()
 				info.ReceivedResponseCount++
+				if isFirstEvent && info.ChannelMeta.ChannelId == 32 {
+					logger.LogInfo(c, fmt.Sprintf("upstream first event: channel=%d retry=%d headers_to_first_event_ms=%d request_to_first_event_ms=%d", info.ChannelMeta.ChannelId, info.RetryIndex, info.FirstResponseTime.Sub(info.UpstreamResponseTime).Milliseconds(), info.FirstResponseTime.Sub(info.UpstreamRequestStartTime).Milliseconds()))
+				}
 
 				select {
 				case dataChan <- data:
