@@ -148,6 +148,27 @@ var TelegramBotName = ""
 var QuotaForNewUser = 0
 var QuotaForInviter = 0
 var QuotaForInvitee = 0
+
+type InviterRewardConfig struct {
+	Type  string `json:"type"`
+	Value int    `json:"value"`
+}
+
+var inviterRewardConfig InviterRewardConfig
+var inviterRewardConfigMutex sync.RWMutex
+
+func GetInviterRewardConfig() InviterRewardConfig {
+	inviterRewardConfigMutex.RLock()
+	defer inviterRewardConfigMutex.RUnlock()
+	return inviterRewardConfig
+}
+
+func SetInviterRewardConfig(config InviterRewardConfig) {
+	inviterRewardConfigMutex.Lock()
+	defer inviterRewardConfigMutex.Unlock()
+	inviterRewardConfig = config
+}
+
 var ChannelDisableThreshold = 5.0
 var AutomaticDisableChannelEnabled = false
 var AutomaticEnableChannelEnabled = false

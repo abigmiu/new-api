@@ -51,8 +51,11 @@ export async function getRuntimeLogs(params: {
   keyword?: string
   limit?: number
 }) {
-  const res = await api.get<RuntimeLogsResponse>('/api/performance/runtime-logs', {
-    params,
-  })
+  const res = await api.get<RuntimeLogsResponse>(
+    '/api/performance/runtime-logs',
+    {
+      params,
+    }
+  )
   return res.data
 }

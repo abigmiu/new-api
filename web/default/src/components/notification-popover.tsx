@@ -355,7 +355,10 @@ export function NotificationPopover({
               <Bell className='size-3.5' />
               {t('Notice')}
               {unreadNoticeCount > 0 ? (
-                <Badge variant='destructive' className='h-4 min-w-4 px-1 text-[10px]'>
+                <Badge
+                  variant='destructive'
+                  className='h-4 min-w-4 px-1 text-[10px]'
+                >
                   {unreadNoticeCount}
                 </Badge>
               ) : null}
@@ -364,8 +367,13 @@ export function NotificationPopover({
               <Megaphone className='size-3.5' />
               {t('Timeline')}
               {unreadAnnouncementsCount > 0 ? (
-                <Badge variant='destructive' className='h-4 min-w-4 px-1 text-[10px]'>
-                  {unreadAnnouncementsCount > 99 ? '99+' : unreadAnnouncementsCount}
+                <Badge
+                  variant='destructive'
+                  className='h-4 min-w-4 px-1 text-[10px]'
+                >
+                  {unreadAnnouncementsCount > 99
+                    ? '99+'
+                    : unreadAnnouncementsCount}
                 </Badge>
               ) : null}
             </TabsTrigger>

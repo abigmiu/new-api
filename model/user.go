@@ -442,6 +442,111 @@ func inviteUser(inviterId int) (err error) {
 	return DB.Save(user).Error
 }
 
+type inviterReward struct {
+	InviterID     int
+	RechargeQuota int
+	RewardQuota   int
+	RewardType    string
+	RewardValue   int
+}
+
+func processInviterReward(tx *gorm.DB, userID int, rechargeQuota int, topUp *TopUp) (*inviterReward, error) {
+	config := common.GetInviterRewardConfig()
+	if config.Type == "" || config.Value == 0 {
+		return nil, nil
+	}
+	if config.Type != "fixed" && config.Type != "percentage" {
+		return nil, nil
+	}
+	if config.Value < 0 || config.Value > common.MaxQuota || (config.Type == "percentage" && config.Value > 100) {
+		return nil, nil
+	}
+	if topUp != nil && topUp.InviterRewardSent {
+		return nil, nil
+	}
+
+	var invitee User
+	if err := tx.Select("id", "inviter_id").First(&invitee, userID).Error; err != nil {
+		return nil, err
+	}
+
+	if invitee.InviterId == 0 {
+		if topUp != nil {
+			if err := markInviterRewardSent(tx, topUp); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	}
+
+	rewardQuota := config.Value
+	if config.Type == "percentage" {
+		rewardQuota = common.QuotaFromFloat(float64(rechargeQuota) * float64(config.Value) / 100)
+	}
+	if rewardQuota <= 0 {
+		return nil, nil
+	}
+
+	maxBeforeReward := common.MaxQuota - rewardQuota
+	result := tx.Model(&User{}).
+		Where("id = ? AND aff_quota <= ? AND aff_history <= ?", invitee.InviterId, maxBeforeReward, maxBeforeReward).
+		Updates(map[string]interface{}{
+			"aff_quota":   gorm.Expr("aff_quota + ?", rewardQuota),
+			"aff_history": gorm.Expr("aff_history + ?", rewardQuota),
+		})
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	if result.RowsAffected == 0 {
+		if topUp != nil {
+			if err := markInviterRewardSent(tx, topUp); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	}
+
+	if topUp != nil {
+		if err := markInviterRewardSent(tx, topUp); err != nil {
+			return nil, err
+		}
+	}
+	return &inviterReward{
+		InviterID:     invitee.InviterId,
+		RechargeQuota: rechargeQuota,
+		RewardQuota:   rewardQuota,
+		RewardType:    config.Type,
+		RewardValue:   config.Value,
+	}, nil
+}
+
+func markInviterRewardSent(tx *gorm.DB, topUp *TopUp) error {
+	topUp.InviterRewardSent = true
+	return tx.Model(topUp).Update("inviter_reward_sent", true).Error
+}
+
+func recordInviterReward(reward *inviterReward) {
+	if reward == nil {
+		return
+	}
+	message := fmt.Sprintf("邀请用户充值返利 %s（固定奖励）", logger.LogQuota(reward.RewardQuota))
+	if reward.RewardType == "percentage" {
+		message = fmt.Sprintf("邀请用户充值返利 %s（充值额度: %s，返利比例: %d%%）", logger.LogQuota(reward.RewardQuota), logger.LogQuota(reward.RechargeQuota), reward.RewardValue)
+	}
+	RecordLog(reward.InviterID, LogTypeSystem, message)
+}
+
+func syncUserQuotaCache(userID int, quota int) {
+	if quota == 0 {
+		return
+	}
+	gopool.Go(func() {
+		if err := cacheIncrUserQuota(userID, int64(quota)); err != nil {
+			common.SysLog("failed to increase user quota: " + err.Error())
+		}
+	})
+}
+
 func (user *User) TransferAffQuotaToQuota(quota int) error {
 	// 检查quota是否小于最小额度
 	if float64(quota) < common.QuotaPerUnit {
@@ -1054,12 +1159,7 @@ func IncreaseUserQuota(id int, quota int, db bool) (err error) {
 	if quota < 0 {
 		return errors.New("quota 不能为负数！")
 	}
-	gopool.Go(func() {
-		err := cacheIncrUserQuota(id, int64(quota))
-		if err != nil {
-			common.SysLog("failed to increase user quota: " + err.Error())
-		}
-	})
+	syncUserQuotaCache(id, quota)
 	if !db && common.BatchUpdateEnabled {
 		addNewRecord(BatchUpdateTypeUserQuota, id, quota)
 		return nil

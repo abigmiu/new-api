@@ -133,7 +133,9 @@ export function AppHeader({
                 onOpenChange={notifications.setPopoverOpen}
                 unreadCount={notifications.unreadCount}
                 unreadNoticeCount={notifications.unreadNoticeCount}
-                unreadAnnouncementsCount={notifications.unreadAnnouncementsCount}
+                unreadAnnouncementsCount={
+                  notifications.unreadAnnouncementsCount
+                }
                 activeTab={notifications.activeTab}
                 onTabChange={notifications.setActiveTab}
                 notice={notifications.notice}

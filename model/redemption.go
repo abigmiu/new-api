@@ -142,6 +142,7 @@ func Redeem(key string, userId int) (quota int, err error) {
 		return 0, errors.New("无效的 user id")
 	}
 	redemption := &Redemption{}
+	var reward *inviterReward
 
 	keyCol := "`key`"
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
@@ -175,13 +176,19 @@ func Redeem(key string, userId int) (quota int, err error) {
 		if result.RowsAffected == 0 {
 			return errors.New("该兑换码已被使用")
 		}
-		return tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error
+		if err := tx.Model(&User{}).Where("id = ?", userId).Update("quota", gorm.Expr("quota + ?", redemption.Quota)).Error; err != nil {
+			return err
+		}
+		reward, err = processInviterReward(tx, userId, redemption.Quota, nil)
+		return err
 	})
 	if err != nil {
 		common.SysError("redemption failed: " + err.Error())
 		return 0, ErrRedeemFailed
 	}
 	RecordLog(userId, LogTypeTopup, fmt.Sprintf("通过兑换码充值 %s，兑换码ID %d", logger.LogQuota(redemption.Quota), redemption.Id))
+	syncUserQuotaCache(userId, redemption.Quota)
+	recordInviterReward(reward)
 	return redemption.Quota, nil
 }
 

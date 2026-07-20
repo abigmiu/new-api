@@ -17,12 +17,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
-import type { ChangeEvent } from 'react'
+import { useMemo, type ChangeEvent } from 'react'
 import type { Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import * as z from 'zod'
 
 import { Input } from '@/components/design-system/input'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/design-system/select'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   Form,
@@ -50,29 +58,74 @@ import { SettingsSection } from '../components/settings-section'
 import { useSettingsForm } from '../hooks/use-settings-form'
 import { useUpdateOption } from '../hooks/use-update-option'
 
-const quotaSchema = z.object({
-  QuotaForNewUser: z.coerce.number().min(0),
-  PreConsumedQuota: z.coerce.number().min(0),
-  QuotaForInviter: z.coerce.number().min(0),
-  QuotaForInvitee: z.coerce.number().min(0),
-  TopUpLink: z.string(),
-  general_setting: z.object({
-    docs_link: z.string(),
-  }),
-  quota_setting: z.object({
-    enable_free_model_pre_consume: z.boolean(),
-  }),
-})
+function createQuotaSchema(percentageErrorMessage: string) {
+  return z
+    .object({
+      QuotaForNewUser: z.coerce.number().min(0),
+      PreConsumedQuota: z.coerce.number().min(0),
+      QuotaForInviter: z.coerce.number().min(0),
+      QuotaForInvitee: z.coerce.number().min(0),
+      InviterRewardType: z.enum(['', 'fixed', 'percentage']),
+      InviterRewardValue: z.coerce.number().int().min(0).max(2147483647),
+      TopUpLink: z.string(),
+      general_setting: z.object({
+        docs_link: z.string(),
+      }),
+      quota_setting: z.object({
+        enable_free_model_pre_consume: z.boolean(),
+      }),
+    })
+    .superRefine((values, context) => {
+      if (
+        values.InviterRewardType === 'percentage' &&
+        values.InviterRewardValue > 100
+      ) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: percentageErrorMessage,
+          path: ['InviterRewardValue'],
+        })
+      }
+    })
+}
 
-type QuotaFormValues = z.infer<typeof quotaSchema>
+type QuotaFormValues = z.infer<ReturnType<typeof createQuotaSchema>>
 type QuotaInputValue = number | ''
+
+type InviterRewardConfig = {
+  type?: unknown
+  value?: unknown
+}
+
+function parseInviterRewardConfig(value: string): {
+  type: '' | 'fixed' | 'percentage'
+  value: number
+} {
+  try {
+    const config = JSON.parse(value) as InviterRewardConfig
+    const type =
+      config.type === 'fixed' || config.type === 'percentage' ? config.type : ''
+    const rewardValue =
+      typeof config.value === 'number' && Number.isInteger(config.value)
+        ? Math.max(0, config.value)
+        : 0
+    return { type, value: rewardValue }
+  } catch {
+    return { type: '', value: 0 }
+  }
+}
 
 function formatQuotaInputValue(value: QuotaInputValue): string {
   return formatQuota(value === '' ? 0 : value)
 }
 
 type QuotaSettingsSectionProps = {
-  defaultValues: QuotaFormValues
+  defaultValues: Omit<
+    QuotaFormValues,
+    'InviterRewardType' | 'InviterRewardValue'
+  > & {
+    InviterRewardConfig: string
+  }
   complianceConfirmed?: boolean
 }
 
@@ -82,6 +135,13 @@ export function QuotaSettingsSection({
 }: QuotaSettingsSectionProps) {
   const { t } = useTranslation()
   const updateOption = useUpdateOption()
+  const quotaSchema = useMemo(
+    () => createQuotaSchema(t('Percentage must be between 0 and 100.')),
+    [t]
+  )
+  const inviterRewardConfig = parseInviterRewardConfig(
+    defaultValues.InviterRewardConfig
+  )
   const handleNumberChange =
     (onChange: (value: QuotaInputValue) => void) =>
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -96,9 +156,27 @@ export function QuotaSettingsSection({
         unknown,
         QuotaFormValues
       >,
-      defaultValues,
+      defaultValues: {
+        ...defaultValues,
+        InviterRewardType: inviterRewardConfig.type,
+        InviterRewardValue: inviterRewardConfig.value,
+      },
       onSubmit: async (_data, changedFields) => {
+        const changedRewardConfig =
+          'InviterRewardType' in changedFields ||
+          'InviterRewardValue' in changedFields
+        if (changedRewardConfig) {
+          const type = _data.InviterRewardType
+          const value = _data.InviterRewardValue
+          await updateOption.mutateAsync({
+            key: 'InviterRewardConfig',
+            value: JSON.stringify({ type, value }),
+          })
+        }
         for (const [key, value] of Object.entries(changedFields)) {
+          if (key === 'InviterRewardType' || key === 'InviterRewardValue') {
+            continue
+          }
           await updateOption.mutateAsync({
             key,
             value: value as string | number | boolean,
@@ -231,6 +309,91 @@ export function QuotaSettingsSection({
                     {t('Quota given to invited users ({{formattedQuota}})', {
                       formattedQuota: formatQuotaInputValue(field.value),
                     })}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='InviterRewardType'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Invite Recharge Rebate')}</FormLabel>
+                  <Select
+                    items={[
+                      { value: '', label: t('Disabled') },
+                      { value: 'fixed', label: t('Fixed quota') },
+                      { value: 'percentage', label: t('Percentage') },
+                    ]}
+                    value={field.value}
+                    onValueChange={(value) => {
+                      if (
+                        value === '' ||
+                        value === 'fixed' ||
+                        value === 'percentage'
+                      ) {
+                        field.onChange(value)
+                      }
+                    }}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent alignItemWithTrigger={false}>
+                      <SelectGroup>
+                        <SelectItem value=''>{t('Disabled')}</SelectItem>
+                        <SelectItem value='fixed'>
+                          {t('Fixed quota')}
+                        </SelectItem>
+                        <SelectItem value='percentage'>
+                          {t('Percentage')}
+                        </SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    {t('Reward inviters when referred users recharge.')}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name='InviterRewardValue'
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>{t('Invite Recharge Rebate Value')}</FormLabel>
+                  <FormControl>
+                    <Input
+                      type='number'
+                      min={0}
+                      max={
+                        form.watch('InviterRewardType') === 'percentage'
+                          ? 100
+                          : 2147483647
+                      }
+                      value={field.value ?? ''}
+                      onChange={handleNumberChange(field.onChange)}
+                      name={field.name}
+                      onBlur={field.onBlur}
+                      ref={field.ref}
+                      disabled={form.watch('InviterRewardType') === ''}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    {form.watch('InviterRewardType') === 'percentage'
+                      ? t(
+                          'Percentage of the referred user recharge, from 0 to 100.'
+                        )
+                      : t(
+                          'Fixed quota granted for each referred user recharge.'
+                        )}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

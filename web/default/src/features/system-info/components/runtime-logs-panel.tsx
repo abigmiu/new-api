@@ -115,7 +115,8 @@ export function RuntimeLogsPanel() {
     },
     initialPageParam: undefined as number | undefined,
     getNextPageParam: (lastPage) => {
-      if (!lastPage.enabled || lastPage.lines.length < LOG_LIMIT) return undefined
+      if (!lastPage.enabled || lastPage.lines.length < LOG_LIMIT)
+        return undefined
       return lastPage.lines.at(-1)?.offset
     },
     staleTime: 10 * 1000,

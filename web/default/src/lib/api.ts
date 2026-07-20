@@ -124,7 +124,9 @@ api.interceptors.response.use(
 
       if (!skip) {
         toast.error(t('Server request failed'), {
-          description: t('The server hit a temporary error. Please try again later.'),
+          description: t(
+            'The server hit a temporary error. Please try again later.'
+          ),
         })
       }
     } else if (!skip) {

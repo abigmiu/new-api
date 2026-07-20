@@ -541,8 +541,9 @@ export function DetailsDialog(props: DetailsDialogProps) {
   const useChannel = other?.admin_info?.use_channel
   const channelChain =
     useChannel && useChannel.length > 0 ? useChannel.join(' → ') : undefined
-  const channelAffinity =
-    props.isAdmin ? other?.admin_info?.channel_affinity : undefined
+  const channelAffinity = props.isAdmin
+    ? other?.admin_info?.channel_affinity
+    : undefined
 
   return (
     <Dialog
@@ -712,12 +713,10 @@ export function DetailsDialog(props: DetailsDialogProps) {
             label={t('Channel Affinity')}
           >
             {channelAffinity.rule_name && (
-              <DetailRow
-                label={t('Rule')}
-                value={channelAffinity.rule_name}
-              />
+              <DetailRow label={t('Rule')} value={channelAffinity.rule_name} />
             )}
-            {(channelAffinity.selected_group || channelAffinity.using_group) && (
+            {(channelAffinity.selected_group ||
+              channelAffinity.using_group) && (
               <DetailRow
                 label={t('Group')}
                 value={

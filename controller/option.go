@@ -143,6 +143,19 @@ func UpdateOption(c *gin.Context) {
 			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
 			return
 		}
+	case "InviterRewardConfig":
+		var config common.InviterRewardConfig
+		if err := common.UnmarshalJsonStr(option.Value.(string), &config); err != nil ||
+			(config.Type != "" && config.Type != "fixed" && config.Type != "percentage") ||
+			config.Value < 0 || config.Value > common.MaxQuota ||
+			(config.Type == "percentage" && config.Value > 100) {
+			common.ApiErrorMsg(c, "无效的邀请充值返利配置")
+			return
+		}
+		if config.Type != "" && config.Value > 0 && !operation_setting.IsPaymentComplianceConfirmed() {
+			common.ApiErrorI18n(c, i18n.MsgPaymentComplianceRequired)
+			return
+		}
 	default:
 		if isPaymentComplianceOptionKey(option.Key) {
 			common.ApiErrorMsg(c, "合规确认字段不允许通过通用设置接口修改")

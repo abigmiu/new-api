@@ -109,7 +109,9 @@ export function CacheEntriesPanel(props: Props) {
             <div className='flex gap-1'>
               <Button
                 size='sm'
-                disabled={isUpdating || !Number.isInteger(channelID) || channelID < 1}
+                disabled={
+                  isUpdating || !Number.isInteger(channelID) || channelID < 1
+                }
                 onClick={async () => {
                   setUpdatingID(entry.id)
                   try {

@@ -42,9 +42,9 @@ import { SettingsPageActionsPortal } from '../../components/settings-page-contex
 import { SettingsSection } from '../../components/settings-section'
 import { useUpdateOption } from '../../hooks/use-update-option'
 import { getCacheStats, clearAllCache, clearRuleCache } from './api'
+import { CacheEntriesPanel } from './cache-entries-panel'
 import { RULE_TEMPLATES, cloneTemplate, makeUniqueName } from './constants'
 import { RuleEditorDialog } from './rule-editor-dialog'
-import { CacheEntriesPanel } from './cache-entries-panel'
 import type { AffinityRule, CacheStats, ChannelAffinitySettings } from './types'
 
 function parseRules(jsonStr: string): AffinityRule[] {
