@@ -6,9 +6,15 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/service"
 
 	"github.com/gin-gonic/gin"
 )
+
+type userLogResponse struct {
+	*model.Log
+	ChannelDisplayName string `json:"channel_display_name,omitempty"`
+}
 
 func GetAllLogs(c *gin.Context) {
 	pageInfo := common.GetPageQuery(c)
@@ -49,8 +55,13 @@ func GetUserLogs(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	userLogs, err := anonymizeUserLogs(logs)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	pageInfo.SetTotal(int(total))
-	pageInfo.SetItems(logs)
+	pageInfo.SetItems(userLogs)
 	common.ApiSuccess(c, pageInfo)
 	return
 }
@@ -88,10 +99,15 @@ func GetLogByKey(c *gin.Context) {
 		})
 		return
 	}
+	userLogs, err := anonymizeUserLogs(logs)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
 	c.JSON(200, gin.H{
 		"success": true,
 		"message": "",
-		"data":    logs,
+		"data":    userLogs,
 	})
 }
 
@@ -129,9 +145,8 @@ func GetLogsSelfStat(c *gin.Context) {
 	endTimestamp, _ := strconv.ParseInt(c.Query("end_timestamp"), 10, 64)
 	tokenName := c.Query("token_name")
 	modelName := c.Query("model_name")
-	channel, _ := strconv.Atoi(c.Query("channel"))
 	group := c.Query("group")
-	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, channel, group)
+	quotaNum, err := model.SumUsedQuota(logType, startTimestamp, endTimestamp, modelName, username, tokenName, 0, group)
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -148,6 +163,25 @@ func GetLogsSelfStat(c *gin.Context) {
 		},
 	})
 	return
+}
+
+func anonymizeUserLogs(logs []*model.Log) ([]userLogResponse, error) {
+	result := make([]userLogResponse, 0, len(logs))
+	for _, log := range logs {
+		copy := *log
+		displayName := ""
+		if log.ChannelId > 0 && log.Group != "" {
+			alias, err := service.EncryptChannelAlias(log.Group, log.ChannelId)
+			if err != nil {
+				return nil, err
+			}
+			displayName = log.Group + "-" + alias
+		}
+		copy.ChannelId = 0
+		copy.ChannelName = ""
+		result = append(result, userLogResponse{Log: &copy, ChannelDisplayName: displayName})
+	}
+	return result, nil
 }
 
 // DeleteHistoryLogs is the legacy synchronous log cleanup endpoint (DELETE /api/log/).

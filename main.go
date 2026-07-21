@@ -326,6 +326,10 @@ func InitResources() error {
 
 	// Initialize options, should after model.InitDB()
 	model.InitOptionMap()
+	if err = service.InitChannelAlias(); err != nil {
+		common.FatalLog("failed to initialize channel alias key: " + err.Error())
+		return err
+	}
 
 	// 清理旧的磁盘缓存文件
 	common.CleanupOldCacheFiles()

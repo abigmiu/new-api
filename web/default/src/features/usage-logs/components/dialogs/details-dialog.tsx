@@ -605,6 +605,14 @@ export function DetailsDialog(props: DetailsDialogProps) {
             />
           )}
 
+          {!props.isAdmin && props.log.channel_display_name && (
+            <DetailRow
+              label={t('Channel')}
+              value={props.log.channel_display_name}
+              mono
+            />
+          )}
+
           {channelChain && props.isAdmin && (
             <DetailRow label={t('Retry Chain')} value={channelChain} mono />
           )}

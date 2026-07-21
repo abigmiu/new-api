@@ -1038,6 +1038,12 @@ func GetChannelsByIds(ids []int) ([]*Channel, error) {
 	return channels, err
 }
 
+func GetEnabledChannels() ([]*Channel, error) {
+	var channels []*Channel
+	err := DB.Select("Id", "Group").Where("status = ?", common.ChannelStatusEnabled).Find(&channels).Error
+	return channels, err
+}
+
 func BatchSetChannelTag(ids []int, tag *string) error {
 	// 开启事务
 	tx := DB.Begin()

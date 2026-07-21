@@ -552,6 +552,36 @@ export function useCommonLogsColumns(isAdmin: boolean): ColumnDef<UsageLog>[] {
     )
   }
 
+  if (!isAdmin) {
+    columns.push({
+      id: 'channel',
+      header: t('Channel'),
+      accessorFn: (row) => row.channel_display_name,
+      cell: function ChannelAliasCell({ row }) {
+        const displayName = row.original.channel_display_name
+        if (!displayName || !isDisplayableLogType(row.original.type)) {
+          return null
+        }
+        return (
+          <CopyableStatusBadge
+            value={displayName}
+            variant='neutral'
+            size='sm'
+            className='max-w-[180px] font-mono'
+          >
+            {displayName}
+          </CopyableStatusBadge>
+        )
+      },
+      size: 180,
+      meta: {
+        cardRole: 'primary',
+        cardOrder: 20,
+        contentMode: 'wrap',
+      },
+    })
+  }
+
   columns.push({
     accessorKey: 'token_name',
     header: t('Token'),

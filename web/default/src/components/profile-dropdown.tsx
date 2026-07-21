@@ -17,7 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useNavigate } from '@tanstack/react-router'
-import { User, Wallet, LogOut, Settings } from 'lucide-react'
+import { User, Wallet, LogOut, Route, Settings } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -105,6 +105,13 @@ export function ProfileDropdown() {
           <DropdownMenuItem onClick={() => navigate({ to: '/profile' })}>
             <User className='size-4' />
             {t('Profile')}
+          </DropdownMenuItem>
+
+          <DropdownMenuItem
+            onClick={() => navigate({ to: '/channel-preferences' })}
+          >
+            <Route className='size-4' />
+            {t('Channel Preferences')}
           </DropdownMenuItem>
 
           {isWalletVisible && (
