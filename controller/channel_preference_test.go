@@ -130,6 +130,21 @@ func TestGetChannelPreferencesOnlyReturnsEnabledChannelsAndNonAutoGroups(t *test
 	}
 }
 
+func TestGetChannelPreferencesReturnsEmptyChannelArrays(t *testing.T) {
+	_, user := setupChannelPreferenceTest(t)
+
+	recorder := callChannelPreferenceHandler(t, user.Id, http.MethodGet, nil)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	var response channelPreferenceAPIResponse
+	require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+	require.True(t, response.Success)
+	require.Len(t, response.Data.Groups, 2)
+	for _, group := range response.Data.Groups {
+		assert.NotNil(t, group.Channels)
+		assert.Empty(t, group.Channels)
+	}
+}
+
 func TestUpdateChannelPreferencesValidatesAndPreservesOtherSettings(t *testing.T) {
 	db, user := setupChannelPreferenceTest(t)
 	enabledDefault := model.Channel{Name: "enabled-default", Group: "default", Status: common.ChannelStatusEnabled}

@@ -66,6 +66,9 @@ func GetChannelPreferences(c *gin.Context) {
 	result := channelPreferenceResponse{Groups: make([]channelPreferenceGroup, 0, len(groups))}
 	for group := range groups {
 		options := channelsByGroup[group]
+		if options == nil {
+			options = []channelPreferenceOption{}
+		}
 		sort.Slice(options, func(i, j int) bool { return options[i].Alias < options[j].Alias })
 		selectedAlias := ""
 		if channelID, ok := setting.PreferredChannels[group]; ok {
