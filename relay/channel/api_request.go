@@ -507,26 +507,17 @@ func doRequest(c *gin.Context, req *http.Request, info *common.RelayInfo) (*http
 	}
 
 	info.UpstreamRequestStartTime = time.Now()
-	traceUpstreamTiming := info.ChannelMeta.ChannelId == 32
-	if traceUpstreamTiming {
-		logger.LogInfo(c, fmt.Sprintf("upstream request start: channel=%d retry=%d inbound_to_upstream_ms=%d", info.ChannelMeta.ChannelId, info.RetryIndex, info.UpstreamRequestStartTime.Sub(info.StartTime).Milliseconds()))
-	}
+	logger.LogInfo(c, fmt.Sprintf("upstream request start: channel=%d retry=%d inbound_to_upstream_ms=%d", info.ChannelMeta.ChannelId, info.RetryIndex, info.UpstreamRequestStartTime.Sub(info.StartTime).Milliseconds()))
 	resp, err := client.Do(req)
 	info.UpstreamResponseTime = time.Now()
 	if err != nil {
-		if traceUpstreamTiming {
-			logger.LogError(c, fmt.Sprintf("upstream response error: channel=%d retry=%d elapsed_ms=%d error=%s", info.ChannelMeta.ChannelId, info.RetryIndex, info.UpstreamResponseTime.Sub(info.UpstreamRequestStartTime).Milliseconds(), err.Error()))
-		} else {
-			logger.LogError(c, "do request failed: "+err.Error())
-		}
+		logger.LogError(c, fmt.Sprintf("upstream response error: channel=%d retry=%d elapsed_ms=%d error=%s", info.ChannelMeta.ChannelId, info.RetryIndex, info.UpstreamResponseTime.Sub(info.UpstreamRequestStartTime).Milliseconds(), err.Error()))
 		return nil, types.NewError(err, types.ErrorCodeDoRequestFailed, types.ErrOptionWithHideErrMsg("upstream error: do request failed"))
 	}
 	if resp == nil {
 		return nil, errors.New("resp is nil")
 	}
-	if traceUpstreamTiming {
-		logger.LogInfo(c, fmt.Sprintf("upstream response headers: channel=%d retry=%d elapsed_ms=%d status=%d", info.ChannelMeta.ChannelId, info.RetryIndex, info.UpstreamResponseTime.Sub(info.UpstreamRequestStartTime).Milliseconds(), resp.StatusCode))
-	}
+	logger.LogInfo(c, fmt.Sprintf("upstream response headers: channel=%d retry=%d elapsed_ms=%d status=%d", info.ChannelMeta.ChannelId, info.RetryIndex, info.UpstreamResponseTime.Sub(info.UpstreamRequestStartTime).Milliseconds(), resp.StatusCode))
 
 	if upID := resp.Header.Get(common2.RequestIdKey); upID != "" {
 		c.Set(common2.UpstreamRequestIdKey, upID)
