@@ -219,6 +219,7 @@ relayLoop:
 			}
 			c.Request.Body = io.NopCloser(bodyStorage)
 
+			markRelayAttemptStart(c)
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
 				newAPIError = relay.WssHelper(c, relayInfo)
@@ -278,6 +279,21 @@ func addUsedChannel(c *gin.Context, channelId int) {
 	useChannel := c.GetStringSlice("use_channel")
 	useChannel = append(useChannel, fmt.Sprintf("%d", channelId))
 	c.Set("use_channel", useChannel)
+}
+
+func markRelayAttemptStart(c *gin.Context) {
+	common.SetContextKey(c, constant.ContextKeyRelayAttemptStartTime, time.Now())
+}
+
+func relayAttemptUseTimeSeconds(c *gin.Context) int {
+	startTime := common.GetContextKeyTime(c, constant.ContextKeyRelayAttemptStartTime)
+	if startTime.IsZero() {
+		startTime = common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
+	}
+	if startTime.IsZero() {
+		startTime = time.Now()
+	}
+	return int(time.Since(startTime).Seconds())
 }
 
 func fastTokenCountMetaForPricing(request dto.Request) *types.TokenCountMeta {
@@ -408,11 +424,7 @@ func processChannelError(c *gin.Context, channelError types.ChannelError, err *t
 		}
 		service.AppendChannelAffinityAdminInfo(c, adminInfo)
 		other["admin_info"] = adminInfo
-		startTime := common.GetContextKeyTime(c, constant.ContextKeyRequestStartTime)
-		if startTime.IsZero() {
-			startTime = time.Now()
-		}
-		useTimeSeconds := int(time.Since(startTime).Seconds())
+		useTimeSeconds := relayAttemptUseTimeSeconds(c)
 		model.RecordErrorLog(c, userId, channelId, modelName, tokenName, err.MaskSensitiveErrorWithStatusCode(), tokenId, useTimeSeconds, common.GetContextKeyBool(c, constant.ContextKeyIsStream), userGroup, other)
 	}
 
