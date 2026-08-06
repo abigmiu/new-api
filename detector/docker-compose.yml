@@ -1,0 +1,19 @@
+name: gpt56-detector
+
+# 独立容器，与主 new-api 服务完全隔离，不共享镜像/依赖/端口
+services:
+  detector:
+    build: .
+    image: gpt56-api-detector:latest
+    container_name: gpt56-api-detector
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./reports:/reports          # 报告持久化；也可换成具名卷
+    ports:
+      - "${REPORT_PUBLIC_PORT:-8080}:8080"   # 公网访问报告；建议经反向代理暴露
+    # 如需容器能访问你的网关，请按需取消下面两行（host 网络/额外 DNS 配置由你决定）
+    # network_mode: host
+    # extra_hosts:
+    #   - "gw.example.com:1.2.3.4"

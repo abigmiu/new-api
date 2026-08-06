@@ -16,6 +16,7 @@ import (
 type channelPreferenceOption struct {
 	Alias       string `json:"alias"`
 	DisplayName string `json:"display_name"`
+	ChannelID   int    `json:"channel_id,omitempty"`
 }
 
 type channelPreferenceGroup struct {
@@ -46,6 +47,7 @@ func GetChannelPreferences(c *gin.Context) {
 	}
 
 	channelsByGroup := make(map[string][]channelPreferenceOption)
+	isAdmin := c.GetInt("role") >= common.RoleAdminUser
 	for _, channel := range channels {
 		for _, group := range channel.GetGroups() {
 			if _, ok := groups[group]; !ok {
@@ -56,10 +58,14 @@ func GetChannelPreferences(c *gin.Context) {
 				common.ApiError(c, aliasErr)
 				return
 			}
-			channelsByGroup[group] = append(channelsByGroup[group], channelPreferenceOption{
+			option := channelPreferenceOption{
 				Alias:       alias,
 				DisplayName: group + "-" + alias,
-			})
+			}
+			if isAdmin {
+				option.ChannelID = channel.Id
+			}
+			channelsByGroup[group] = append(channelsByGroup[group], option)
 		}
 	}
 

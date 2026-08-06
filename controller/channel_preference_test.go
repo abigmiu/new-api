@@ -202,3 +202,35 @@ func TestAnonymizeUserLogsHidesRawChannelFields(t *testing.T) {
 	assert.Equal(t, float64(0), fields["channel"])
 	assert.Equal(t, "", fields["channel_name"])
 }
+
+func TestGetChannelPreferencesChannelIDVisibleOnlyToAdmin(t *testing.T) {
+	db, user := setupChannelPreferenceTest(t)
+	enabledDefault := model.Channel{Name: "enabled-default", Group: "default", Status: common.ChannelStatusEnabled}
+	require.NoError(t, db.Create(&enabledDefault).Error)
+
+	run := func(role int) map[string]any {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodGet, "/api/user/self/channel_preferences", nil)
+		context, _ := gin.CreateTestContext(recorder)
+		context.Request = request
+		context.Set("id", user.Id)
+		context.Set("role", role)
+		common.SetContextKey(context, constant.ContextKeyUserGroup, "default")
+		GetChannelPreferences(context)
+		var response channelPreferenceAPIResponse
+		require.NoError(t, common.Unmarshal(recorder.Body.Bytes(), &response))
+		require.True(t, response.Success)
+		return map[string]any{
+			"channel_id": response.Data.Groups[0].Channels[0].ChannelID,
+			"alias":      response.Data.Groups[0].Channels[0].Alias,
+		}
+	}
+
+	commonUser := run(common.RoleCommonUser)
+	assert.Equal(t, 0, commonUser["channel_id"])
+	assert.NotEmpty(t, commonUser["alias"])
+
+	admin := run(common.RoleAdminUser)
+	assert.Equal(t, enabledDefault.Id, admin["channel_id"])
+	assert.Equal(t, commonUser["alias"], admin["alias"])
+}
