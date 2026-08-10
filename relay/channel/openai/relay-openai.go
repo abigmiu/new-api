@@ -1,6 +1,8 @@
 package openai
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -121,6 +123,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	var secondLastStreamData string // 存储倒数第二个stream data，用于音频模型
 	seenStreamToolCalls := make(map[string]struct{})
 	var streamFunctionCallNames []string
+	receivedResponseCount := info.ReceivedResponseCount
 
 	// 检查是否为音频模型
 	isAudioModel := strings.Contains(strings.ToLower(model), "audio")
@@ -146,6 +149,10 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 			}
 		}
 	})
+
+	if info.ReceivedResponseCount == receivedResponseCount {
+		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+	}
 
 	// 对音频模型，从倒数第二个stream data中提取usage信息
 	if isAudioModel && secondLastStreamData != "" {
@@ -227,6 +234,9 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
+	if len(bytes.TrimSpace(responseBody)) == 0 {
+		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+	}
 	logger.LogDebug(c, "upstream response body: %s", responseBody)
 	// Unmarshal to simpleResponse
 	if info.ChannelType == constant.ChannelTypeOpenRouter && info.ChannelOtherSettings.IsOpenRouterEnterprise() {
@@ -243,6 +253,9 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 			return nil, types.NewOpenAIError(fmt.Errorf("openrouter response success=false"), types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 		}
 	}
+	if len(bytes.TrimSpace(responseBody)) == 0 {
+		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+	}
 
 	err = common.Unmarshal(responseBody, &simpleResponse)
 	if err != nil {
@@ -251,6 +264,9 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 
 	if oaiError := simpleResponse.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	}
+	if len(simpleResponse.Choices) == 0 {
+		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
 	}
 
 	for _, choice := range simpleResponse.Choices {

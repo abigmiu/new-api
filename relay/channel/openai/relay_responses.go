@@ -1,6 +1,8 @@
 package openai
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -26,12 +28,18 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
+	if len(bytes.TrimSpace(responseBody)) == 0 {
+		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI Responses API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+	}
 	err = common.Unmarshal(responseBody, &responsesResponse)
 	if err != nil {
 		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
 	}
 	if oaiError := responsesResponse.GetOpenAIError(); oaiError != nil && oaiError.Type != "" {
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
+	}
+	if len(responsesResponse.Output) == 0 {
+		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI Responses API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
 	}
 
 	// 写入新的 response body
@@ -84,6 +92,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	var responseTextBuilder strings.Builder
 	imageCounter := &relaycommon.ImageGenerationCallCounter{}
 	imageCommitted := false
+	receivedResponseCount := info.ReceivedResponseCount
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 
@@ -157,6 +166,10 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			}
 		}
 	})
+
+	if info.ReceivedResponseCount == receivedResponseCount {
+		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI Responses API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+	}
 
 	if usage.CompletionTokens == 0 {
 		// 计算输出文本的 token 数量
