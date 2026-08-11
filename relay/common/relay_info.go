@@ -818,6 +818,13 @@ func (info *RelayInfo) SetFirstResponseTime() {
 	}
 }
 
+func (info *RelayInfo) ResetAttemptTiming() {
+	info.UpstreamRequestStartTime = time.Time{}
+	info.UpstreamResponseTime = time.Time{}
+	info.FirstResponseTime = time.Time{}
+	info.isFirstResponse = true
+}
+
 func (info *RelayInfo) HasSendResponse() bool {
 	return info.FirstResponseTime.After(info.StartTime)
 }

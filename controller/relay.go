@@ -226,6 +226,7 @@ relayLoop:
 			c.Request.Body = io.NopCloser(bodyStorage)
 
 			markRelayAttemptStart(c)
+			relayInfo.ResetAttemptTiming()
 			switch relayFormat {
 			case types.RelayFormatOpenAIRealtime:
 				newAPIError = relay.WssHelper(c, relayInfo)
@@ -244,6 +245,7 @@ relayLoop:
 
 			newAPIError = service.NormalizeViolationFeeError(newAPIError)
 			relayInfo.LastError = newAPIError
+			perfmetrics.RecordChannelFailure(relayInfo)
 
 			processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
 
@@ -591,10 +593,13 @@ taskRelayLoop:
 			}
 			c.Request.Body = io.NopCloser(bodyStorage)
 
+			relayInfo.ResetAttemptTiming()
 			result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
 			if taskErr == nil {
+				perfmetrics.RecordRelaySampleWithUsage(relayInfo, true, nil)
 				break taskRelayLoop
 			}
+			perfmetrics.RecordChannelFailure(relayInfo)
 
 			if !taskErr.LocalError {
 				processChannelError(c,

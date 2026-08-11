@@ -80,3 +80,19 @@ func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupRes
 		return ok || g.Group == "auto"
 	})
 }
+
+func GetChannelPerformance(c *gin.Context) {
+	hours := 24
+	switch c.Query("range") {
+	case "1h":
+		hours = 1
+	case "7d":
+		hours = 24 * 7
+	}
+	result, err := perfmetrics.QueryChannelPerformance(hours)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
