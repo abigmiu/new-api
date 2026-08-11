@@ -128,3 +128,50 @@ func TestOpenAIStreamHandlersReturnRetryableErrorWithoutDataEvents(t *testing.T)
 		})
 	}
 }
+
+func TestOaiResponsesStreamHandlerReturnsRetryableErrorForServerOverload(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldStreamingTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldStreamingTimeout })
+
+	for _, code := range []string{"server_is_overloaded", "slow_down"} {
+		t.Run(code, func(t *testing.T) {
+			body := "data: {\"type\":\"response.created\",\"response\":{\"id\":\"resp_1\",\"status\":\"in_progress\"}}\n\n" +
+				"data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"message\":\"Selected model is at capacity. Please try a different model.\",\"type\":\"service_unavailable_error\",\"code\":\"" + code + "\"}}}\n\n"
+			c, recorder, resp := newEmptyResponseTestContext("/v1/responses", body, "text/event-stream")
+			info := &relaycommon.RelayInfo{
+				ChannelMeta: &relaycommon.ChannelMeta{},
+				DisablePing: true,
+			}
+
+			_, apiErr := OaiResponsesStreamHandler(c, info, resp)
+
+			require.NotNil(t, apiErr)
+			assert.Equal(t, types.ErrorCode(code), apiErr.GetErrorCode())
+			assert.Equal(t, http.StatusServiceUnavailable, apiErr.StatusCode)
+			assert.Empty(t, recorder.Body.String())
+		})
+	}
+}
+
+func TestOaiResponsesStreamHandlerDoesNotRetryServerOverloadAfterOutput(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldStreamingTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldStreamingTimeout })
+
+	body := "data: {\"type\":\"response.output_text.delta\",\"delta\":\"partial\"}\n\n" +
+		"data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"message\":\"Selected model is at capacity. Please try a different model.\",\"type\":\"service_unavailable_error\",\"code\":\"server_is_overloaded\"}}}\n\n"
+	c, recorder, resp := newEmptyResponseTestContext("/v1/responses", body, "text/event-stream")
+	info := &relaycommon.RelayInfo{
+		ChannelMeta: &relaycommon.ChannelMeta{},
+		DisablePing: true,
+	}
+
+	_, apiErr := OaiResponsesStreamHandler(c, info, resp)
+
+	require.Nil(t, apiErr)
+	assert.Contains(t, recorder.Body.String(), `"delta":"partial"`)
+	assert.Contains(t, recorder.Body.String(), `"code":"server_is_overloaded"`)
+}

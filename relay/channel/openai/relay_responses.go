@@ -92,7 +92,12 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	var responseTextBuilder strings.Builder
 	imageCounter := &relaycommon.ImageGenerationCallCounter{}
 	imageCommitted := false
-	receivedResponseCount := info.ReceivedResponseCount
+	var streamError *types.NewAPIError
+	streamCommitted := false
+	var pendingStreamData []struct {
+		response dto.ResponsesStreamResponse
+		data     string
+	}
 
 	helper.StreamScannerHandler(c, resp, info, func(data string, sr *helper.StreamResult) {
 
@@ -102,6 +107,39 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			logger.LogError(c, "failed to unmarshal stream response: "+err.Error())
 			sr.Error(err)
 			return
+		}
+		if streamResponse.Type == "response.failed" && streamResponse.Response != nil {
+			if oaiError := streamResponse.Response.GetOpenAIError(); oaiError != nil {
+				code, _ := oaiError.Code.(string)
+				if !streamCommitted && (code == "server_is_overloaded" || code == "slow_down") {
+					if oaiError.Message == "" {
+						oaiError.Message = "OpenAI server is overloaded"
+					}
+					streamError = types.WithOpenAIError(*oaiError, http.StatusServiceUnavailable)
+					sr.Stop(streamError)
+					return
+				}
+			}
+		}
+
+		if !streamCommitted {
+			switch streamResponse.Type {
+			case "":
+				sr.Error(errors.New("empty OpenAI Responses stream event"))
+				return
+			case "response.created", "response.in_progress", "response.queued":
+				pendingStreamData = append(pendingStreamData, struct {
+					response dto.ResponsesStreamResponse
+					data     string
+				}{response: streamResponse, data: data})
+				return
+			default:
+				for _, pending := range pendingStreamData {
+					sendResponsesStreamData(c, pending.response, pending.data)
+				}
+				pendingStreamData = nil
+				streamCommitted = true
+			}
 		}
 		sendResponsesStreamData(c, streamResponse, data)
 		switch streamResponse.Type {
@@ -167,7 +205,10 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		}
 	})
 
-	if info.ReceivedResponseCount == receivedResponseCount {
+	if streamError != nil {
+		return nil, streamError
+	}
+	if !streamCommitted {
 		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI Responses API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
 	}
 
