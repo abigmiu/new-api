@@ -51,7 +51,7 @@ type atomicChannelBucket struct {
 
 var channelHotBuckets sync.Map
 
-func RecordRelaySampleWithUsage(info *relaycommon.RelayInfo, success bool, usage *dto.Usage) {
+func RecordRelaySampleWithUsage(info *relaycommon.RelayInfo, success bool, usage *dto.Usage, billed bool) {
 	if !perf_metrics_setting.GetSetting().Enabled || info == nil || info.ChannelId == 0 || info.OriginModelName == "" {
 		return
 	}
@@ -62,6 +62,11 @@ func RecordRelaySampleWithUsage(info *relaycommon.RelayInfo, success bool, usage
 	if latencyMs < 0 {
 		latencyMs = 0
 	}
+	cachedInput, logicalInput := int64(0), int64(0)
+	if success && billed {
+		cachedInput = usageCachedTokens(usage)
+		logicalInput = usageLogicalInputTokens(usage, info.GetFinalRequestRelayFormat() == relaytypes.RelayFormatClaude)
+	}
 	sample := channelSample{
 		channelID:     info.ChannelId,
 		model:         info.OriginModelName,
@@ -70,10 +75,10 @@ func RecordRelaySampleWithUsage(info *relaycommon.RelayInfo, success bool, usage
 		outputTokens:  usageOutputTokens(usage),
 		generationMs:  generationDuration(info, latencyMs),
 		ttftMs:        attemptTtft(info),
-		cacheReported: usage != nil && cacheUsageSupported(info.GetFinalRequestRelayFormat()),
-		cacheHit:      usageHasCache(usage),
-		cachedInput:   usageCachedTokens(usage),
-		logicalInput:  usageLogicalInputTokens(usage, info.GetFinalRequestRelayFormat() == relaytypes.RelayFormatClaude),
+		cacheReported: success && billed && usage != nil && cacheUsageSupported(info.GetFinalRequestRelayFormat()),
+		cacheHit:      success && billed && usageHasCache(usage),
+		cachedInput:   cachedInput,
+		logicalInput:  logicalInput,
 	}
 	recordChannelSample(sample)
 }
@@ -91,12 +96,12 @@ func RecordChannelFailure(info *relaycommon.RelayInfo) {
 	if info == nil || info.UpstreamRequestStartTime.IsZero() {
 		return
 	}
-	RecordRelaySampleWithUsage(info, false, nil)
+	RecordRelaySampleWithUsage(info, false, nil, false)
 }
 
 func RecordRealtimeRelaySampleWithUsage(info *relaycommon.RelayInfo, usage *dto.RealtimeUsage) {
 	if usage == nil {
-		RecordRelaySampleWithUsage(info, true, nil)
+		RecordRelaySampleWithUsage(info, true, nil, false)
 		return
 	}
 	inputDetails := usage.InputTokenDetails
@@ -109,7 +114,7 @@ func RecordRealtimeRelaySampleWithUsage(info *relaycommon.RelayInfo, usage *dto.
 		OutputTokens:           usage.OutputTokens,
 		InputTokensDetails:     &inputDetails,
 		CompletionTokenDetails: usage.OutputTokenDetails,
-	})
+	}, true)
 }
 
 func recordChannelSample(sample channelSample) {

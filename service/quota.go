@@ -258,7 +258,16 @@ func PostWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, mod
 	})
 	relayInfoSnapshot := *relayInfo
 	gopool.Go(func() {
-		perfmetrics.RecordRealtimeRelaySampleWithUsage(&relayInfoSnapshot, usage)
+		perfmetrics.RecordRelaySampleWithUsage(&relayInfoSnapshot, true, &dto.Usage{
+			PromptTokens:           usage.InputTokens,
+			CompletionTokens:       usage.OutputTokens,
+			TotalTokens:            usage.TotalTokens,
+			PromptTokensDetails:    usage.InputTokenDetails,
+			InputTokens:            usage.InputTokens,
+			OutputTokens:           usage.OutputTokens,
+			InputTokensDetails:     &usage.InputTokenDetails,
+			CompletionTokenDetails: usage.OutputTokenDetails,
+		}, quota > 0)
 	})
 }
 
@@ -386,7 +395,7 @@ func PostAudioConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, u
 	relayInfoSnapshot := *relayInfo
 	gopool.Go(func() {
 		perfmetrics.RecordRelaySample(&relayInfoSnapshot, true, int64(usage.CompletionTokens))
-		perfmetrics.RecordRelaySampleWithUsage(&relayInfoSnapshot, true, usage)
+		perfmetrics.RecordRelaySampleWithUsage(&relayInfoSnapshot, true, usage, quota > 0)
 	})
 }
 

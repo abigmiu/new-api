@@ -9,6 +9,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/relaykit/dto"
+	relaytypes "github.com/QuantumNous/new-api/relaykit/types"
 	"github.com/alicebob/miniredis/v2"
 	"github.com/go-redis/redis/v8"
 	"github.com/stretchr/testify/assert"
@@ -46,6 +47,51 @@ func TestRecordChannelSampleCountsEachAttemptAndCacheCoverage(t *testing.T) {
 	assert.EqualValues(t, 1, counters.cacheReportCount)
 	assert.EqualValues(t, 1, counters.cacheHitCount)
 	assert.EqualValues(t, 60, counters.cachedInputTokens)
+	assert.EqualValues(t, 100, counters.logicalInputTokens)
+}
+
+func TestRecordRelaySampleWithUsageExcludesUnbilledAndFailedCacheData(t *testing.T) {
+	channelID := 900005
+	key := channelBucketKey{channelID: channelID, model: "test-model", bucketTs: channelBucketStart(1754890000)}
+	actual := &atomicChannelBucket{}
+	channelHotBuckets.Store(key, actual)
+	t.Cleanup(func() { channelHotBuckets.Delete(key) })
+
+	info := &relaycommon.RelayInfo{
+		ChannelMeta:     &relaycommon.ChannelMeta{ChannelId: channelID},
+		OriginModelName: "test-model",
+		RelayFormat:     relaytypes.RelayFormatOpenAI,
+	}
+	info.UpstreamRequestStartTime = time.Unix(1754890000, 0)
+	info.StartTime = info.UpstreamRequestStartTime
+	usage := &dto.Usage{PromptTokens: 100, PromptTokensDetails: dto.InputTokenDetails{CachedTokens: 40}}
+
+	recordUsageSample := func(success, billed bool) {
+		cachedInput, logicalInput := int64(0), int64(0)
+		if success && billed {
+			cachedInput = usageCachedTokens(usage)
+			logicalInput = usageLogicalInputTokens(usage, false)
+		}
+		recordChannelSampleAt(channelSample{
+			channelID:     info.ChannelId,
+			model:         info.OriginModelName,
+			success:       success,
+			cacheReported: success && billed && cacheUsageSupported(info.GetFinalRequestRelayFormat()),
+			cacheHit:      success && billed && usageHasCache(usage),
+			cachedInput:   cachedInput,
+			logicalInput:  logicalInput,
+		}, 1754890000)
+	}
+	recordUsageSample(true, false)
+	recordUsageSample(false, true)
+	recordUsageSample(true, true)
+
+	counters := snapshotChannelBucket(actual)
+	assert.EqualValues(t, 3, counters.attemptCount)
+	assert.EqualValues(t, 2, counters.successCount)
+	assert.EqualValues(t, 1, counters.cacheReportCount)
+	assert.EqualValues(t, 1, counters.cacheHitCount)
+	assert.EqualValues(t, 40, counters.cachedInputTokens)
 	assert.EqualValues(t, 100, counters.logicalInputTokens)
 }
 

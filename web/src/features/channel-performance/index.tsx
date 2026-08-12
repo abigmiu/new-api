@@ -31,6 +31,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import { getChannelTypeLabel } from '@/features/channels/lib/channel-utils'
+import { getSuccessRateLevel } from '@/features/performance-metrics/lib/format'
 import { cn } from '@/lib/utils'
 
 import { getChannelPerformance } from './api'
@@ -322,6 +323,15 @@ function PerformanceBars(props: { series: ChannelPerformanceBucket[] }) {
       {props.series.map((bucket) => {
         const hasData = bucket.attempt_count > 0
         const height = hasData ? Math.max(8, bucket.success_rate) : 8
+        const colorClass = hasData
+          ? {
+              excellent: 'bg-emerald-500',
+              good: 'bg-emerald-400',
+              warning: 'bg-amber-500',
+              critical: 'bg-red-500',
+              unknown: 'bg-muted',
+            }[getSuccessRateLevel(bucket.success_rate)]
+          : 'bg-muted'
         return (
           <Tooltip key={bucket.start_ts}>
             <TooltipTrigger
@@ -330,24 +340,29 @@ function PerformanceBars(props: { series: ChannelPerformanceBucket[] }) {
                   type='button'
                   className={cn(
                     'focus-visible:ring-ring min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2',
-                    hasData ? 'bg-emerald-500' : 'bg-muted'
+                    colorClass
                   )}
                   style={{ height: `${height}%` }}
                   aria-label={`${dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')} ${hasData ? percent(bucket.success_rate) : t('No data')}`}
                 />
               }
             />
-            <TooltipContent className='space-y-1'>
-              <div className='font-medium'>
+            <TooltipContent className='min-w-52 space-y-1.5'>
+              <div className='font-medium whitespace-nowrap'>
                 {dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')} –{' '}
                 {dayjs.unix(bucket.end_ts).format('HH:mm')}
               </div>
-              <div className='font-mono text-sm'>
+              <div className='font-mono text-sm font-semibold'>
                 {hasData ? percent(bucket.success_rate) : '—'}
               </div>
-              <div className='text-muted-foreground'>
-                {t('{{count}} requests', { count: bucket.attempt_count })} ·{' '}
-                {duration(bucket.total_latency_ms)}
+              <div className='text-muted-foreground text-xs'>
+                {t('{{count}} requests', { count: bucket.attempt_count })}
+              </div>
+              <div className='text-muted-foreground text-xs'>
+                {t('Average latency')}:{' '}
+                {hasData
+                  ? duration(bucket.total_latency_ms / bucket.attempt_count)
+                  : '—'}
               </div>
             </TooltipContent>
           </Tooltip>

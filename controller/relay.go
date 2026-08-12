@@ -596,7 +596,7 @@ taskRelayLoop:
 			relayInfo.ResetAttemptTiming()
 			result, taskErr = relay.RelayTaskSubmit(c, relayInfo)
 			if taskErr == nil {
-				perfmetrics.RecordRelaySampleWithUsage(relayInfo, true, nil)
+				perfmetrics.RecordRelaySampleWithUsage(relayInfo, true, nil, false)
 				break taskRelayLoop
 			}
 			perfmetrics.RecordChannelFailure(relayInfo)
