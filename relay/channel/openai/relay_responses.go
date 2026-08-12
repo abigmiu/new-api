@@ -123,23 +123,23 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		}
 
 		if !streamCommitted {
-			switch streamResponse.Type {
-			case "":
+			if streamResponse.Type == "" {
 				sr.Error(errors.New("empty OpenAI Responses stream event"))
 				return
-			case "response.created", "response.in_progress", "response.queued":
+			}
+			if streamResponse.Type == "response.created" || streamResponse.Type == "response.in_progress" ||
+				streamResponse.Type == "response.queued" || strings.HasSuffix(streamResponse.Type, ".added") {
 				pendingStreamData = append(pendingStreamData, struct {
 					response dto.ResponsesStreamResponse
 					data     string
 				}{response: streamResponse, data: data})
 				return
-			default:
-				for _, pending := range pendingStreamData {
-					sendResponsesStreamData(c, pending.response, pending.data)
-				}
-				pendingStreamData = nil
-				streamCommitted = true
 			}
+			for _, pending := range pendingStreamData {
+				sendResponsesStreamData(c, pending.response, pending.data)
+			}
+			pendingStreamData = nil
+			streamCommitted = true
 		}
 		sendResponsesStreamData(c, streamResponse, data)
 		switch streamResponse.Type {

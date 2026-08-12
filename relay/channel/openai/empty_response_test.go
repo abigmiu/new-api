@@ -107,6 +107,17 @@ func TestOpenAIStreamHandlersReturnRetryableErrorWithoutDataEvents(t *testing.T)
 				return apiErr
 			},
 		},
+		{
+			name: "responses lifecycle events only",
+			path: "/v1/responses",
+			body: "data: {\"type\":\"response.created\",\"response\":{\"status\":\"in_progress\"}}\n\n" +
+				"data: {\"type\":\"response.output_item.added\",\"item\":{\"type\":\"reasoning\",\"status\":\"in_progress\"}}\n\n" +
+				"data: {\"type\":\"response.content_part.added\",\"part\":{\"type\":\"output_text\",\"text\":\"\"}}\n\n",
+			handler: func(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Response) *types.NewAPIError {
+				_, apiErr := OaiResponsesStreamHandler(c, info, resp)
+				return apiErr
+			},
+		},
 	}
 
 	for _, test := range tests {
