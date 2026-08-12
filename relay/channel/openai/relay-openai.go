@@ -2,7 +2,6 @@ package openai
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -151,7 +150,7 @@ func OaiStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Re
 	})
 
 	if info.ReceivedResponseCount == receivedResponseCount {
-		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+		logger.LogInfo(c, "openai stream produced no response events; keeping existing success behavior")
 	}
 
 	// 对音频模型，从倒数第二个stream data中提取usage信息
@@ -235,7 +234,8 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
 	if len(bytes.TrimSpace(responseBody)) == 0 {
-		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+		logger.LogInfo(c, "openai response body is empty; keeping existing success behavior")
+		return &dto.Usage{}, nil
 	}
 	logger.LogDebug(c, "upstream response body: %s", responseBody)
 	// Unmarshal to simpleResponse
@@ -254,7 +254,8 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		}
 	}
 	if len(bytes.TrimSpace(responseBody)) == 0 {
-		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+		logger.LogInfo(c, "openai response body is empty after unwrap; keeping existing success behavior")
+		return &dto.Usage{}, nil
 	}
 
 	err = common.Unmarshal(responseBody, &simpleResponse)
@@ -266,7 +267,7 @@ func OpenaiHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http.Respo
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 	if len(simpleResponse.Choices) == 0 {
-		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+		logger.LogInfo(c, "openai response choices are empty; keeping existing success behavior")
 	}
 
 	for _, choice := range simpleResponse.Choices {

@@ -29,7 +29,8 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
 	}
 	if len(bytes.TrimSpace(responseBody)) == 0 {
-		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI Responses API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+		logger.LogInfo(c, "openai responses response body is empty; keeping existing success behavior")
+		return &dto.Usage{}, nil
 	}
 	err = common.Unmarshal(responseBody, &responsesResponse)
 	if err != nil {
@@ -39,7 +40,7 @@ func OaiResponsesHandler(c *gin.Context, info *relaycommon.RelayInfo, resp *http
 		return nil, types.WithOpenAIError(*oaiError, resp.StatusCode)
 	}
 	if len(responsesResponse.Output) == 0 {
-		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI Responses API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+		logger.LogInfo(c, "openai responses output is empty; keeping existing success behavior")
 	}
 
 	// 写入新的 response body
@@ -94,6 +95,14 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	imageCommitted := false
 	var streamError *types.NewAPIError
 	streamCommitted := false
+	eventCount := 0
+	eventTypes := make([]string, 0, 20)
+	nonEmptyDeltaEvents := 0
+	outputItemEvents := 0
+	completedEvents := 0
+	failedEvents := 0
+	usagePresent := false
+	responseOutputItems := 0
 	var pendingStreamData []struct {
 		response dto.ResponsesStreamResponse
 		data     string
@@ -103,6 +112,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 
 		// 检查当前数据是否包含 completed 状态和 usage 信息
 		var streamResponse dto.ResponsesStreamResponse
+		eventCount++
 		if err := common.UnmarshalJsonStr(data, &streamResponse); err != nil {
 			logger.LogError(c, "failed to unmarshal stream response: "+err.Error())
 			sr.Error(err)
@@ -119,6 +129,28 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 					sr.Stop(streamError)
 					return
 				}
+			}
+		}
+
+		if len(eventTypes) < cap(eventTypes) {
+			eventTypes = append(eventTypes, streamResponse.Type)
+		}
+		if streamResponse.Delta != "" {
+			nonEmptyDeltaEvents++
+		}
+		if streamResponse.Item != nil {
+			outputItemEvents++
+		}
+		switch streamResponse.Type {
+		case "response.completed", "response.done":
+			completedEvents++
+		case "response.failed", "response.incomplete", "response.cancelled", "response.canceled":
+			failedEvents++
+		}
+		if streamResponse.Response != nil {
+			responseOutputItems += len(streamResponse.Response.Output)
+			if streamResponse.Response.Usage != nil {
+				usagePresent = true
 			}
 		}
 
@@ -204,12 +236,13 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			}
 		}
 	})
+	logger.LogInfo(c, fmt.Sprintf("responses stream summary: events=%d types=%v non_empty_delta_events=%d output_item_events=%d response_output_items=%d completed_events=%d failed_events=%d usage_present=%t input_tokens=%d output_tokens=%d total_tokens=%d committed=%t pending_events=%d end_reason=%s", eventCount, eventTypes, nonEmptyDeltaEvents, outputItemEvents, responseOutputItems, completedEvents, failedEvents, usagePresent, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, streamCommitted, len(pendingStreamData), info.StreamStatus.Summary()))
 
 	if streamError != nil {
 		return nil, streamError
 	}
 	if !streamCommitted {
-		return nil, types.NewOpenAIError(errors.New("empty response from OpenAI Responses API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+		logger.LogInfo(c, "responses stream produced no committed response; keeping existing success behavior")
 	}
 
 	if usage.CompletionTokens == 0 {

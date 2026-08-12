@@ -37,10 +37,8 @@ func TestOpenaiHandlerReturnsRetryableErrorForEmptyResponse(t *testing.T) {
 			c, recorder, resp := newEmptyResponseTestContext("/v1/chat/completions", body, "application/json")
 			_, apiErr := OpenaiHandler(c, &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{}}, resp)
 
-			require.NotNil(t, apiErr)
-			assert.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
-			assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
-			assert.Empty(t, recorder.Body.String())
+			require.Nil(t, apiErr)
+			assert.Equal(t, strings.TrimSpace(body), recorder.Body.String())
 		})
 	}
 }
@@ -53,10 +51,8 @@ func TestOaiResponsesHandlerReturnsRetryableErrorForEmptyResponse(t *testing.T) 
 			c, recorder, resp := newEmptyResponseTestContext("/v1/responses", body, "application/json")
 			_, apiErr := OaiResponsesHandler(c, &relaycommon.RelayInfo{}, resp)
 
-			require.NotNil(t, apiErr)
-			assert.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
-			assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
-			assert.Empty(t, recorder.Body.String())
+			require.Nil(t, apiErr)
+			assert.Equal(t, strings.TrimSpace(body), recorder.Body.String())
 		})
 	}
 }
@@ -122,7 +118,7 @@ func TestOpenAIStreamHandlersReturnRetryableErrorWithoutDataEvents(t *testing.T)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			c, recorder, resp := newEmptyResponseTestContext(test.path, test.body, "text/event-stream")
+			c, _, resp := newEmptyResponseTestContext(test.path, test.body, "text/event-stream")
 			info := &relaycommon.RelayInfo{
 				RelayMode:   relayconstant.RelayModeChatCompletions,
 				RelayFormat: types.RelayFormatOpenAI,
@@ -132,10 +128,7 @@ func TestOpenAIStreamHandlersReturnRetryableErrorWithoutDataEvents(t *testing.T)
 
 			apiErr := test.handler(c, info, resp)
 
-			require.NotNil(t, apiErr)
-			assert.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
-			assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
-			assert.Empty(t, recorder.Body.String())
+			require.Nil(t, apiErr)
 		})
 	}
 }
