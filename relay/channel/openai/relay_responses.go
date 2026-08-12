@@ -131,6 +131,12 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 				}
 			}
 		}
+		if !streamCommitted && (streamResponse.Type == "response.completed" || streamResponse.Type == "response.done") &&
+			streamResponse.Response != nil && len(streamResponse.Response.Output) == 0 && streamResponse.Response.Usage == nil {
+			streamError = types.NewOpenAIError(errors.New("empty completed response from OpenAI Responses API"), types.ErrorCodeEmptyResponse, http.StatusInternalServerError)
+			sr.Stop(streamError)
+			return
+		}
 
 		if len(eventTypes) < cap(eventTypes) {
 			eventTypes = append(eventTypes, streamResponse.Type)

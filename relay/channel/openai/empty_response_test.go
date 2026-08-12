@@ -159,6 +159,26 @@ func TestOaiResponsesStreamHandlerReturnsRetryableErrorForServerOverload(t *test
 	}
 }
 
+func TestOaiResponsesStreamHandlerRetriesEmptyCompletedResponse(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldStreamingTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldStreamingTimeout })
+
+	body := "data: {\"type\":\"response.created\",\"response\":{\"status\":\"in_progress\"}}\n\n" +
+		"data: {\"type\":\"response.in_progress\",\"response\":{\"status\":\"in_progress\"}}\n\n" +
+		"data: {\"type\":\"response.completed\",\"response\":{\"status\":\"completed\",\"output\":[]}}\n\n"
+	c, recorder, resp := newEmptyResponseTestContext("/v1/responses", body, "text/event-stream")
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{}, DisablePing: true}
+
+	_, apiErr := OaiResponsesStreamHandler(c, info, resp)
+
+	require.NotNil(t, apiErr)
+	assert.Equal(t, types.ErrorCodeEmptyResponse, apiErr.GetErrorCode())
+	assert.Equal(t, http.StatusInternalServerError, apiErr.StatusCode)
+	assert.Empty(t, recorder.Body.String())
+}
+
 func TestOaiResponsesStreamHandlerDoesNotRetryServerOverloadAfterOutput(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	oldStreamingTimeout := constant.StreamingTimeout
