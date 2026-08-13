@@ -105,6 +105,7 @@ func Distribute() func(c *gin.Context) {
 				if preferred, found := getUserPreferredChannel(c, modelRequest.Model, usingGroup); found {
 					channel = preferred
 					selectGroup = usingGroup
+					common.SetContextKey(c, constant.ContextKeyUserPreferredChannel, true)
 				}
 
 				if channel == nil {

@@ -256,7 +256,7 @@ relayLoop:
 				if common.RetryTimes-retryParam.GetRetry() <= 0 {
 					break relayLoop
 				}
-				if _, ok := c.Get("specific_channel_id"); ok {
+				if shouldStopAfterSelectedChannelRetries(c) {
 					break relayLoop
 				}
 				break
@@ -392,6 +392,13 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError, retryTimes int) b
 		return false
 	}
 	return operation_setting.ShouldRetryByStatusCode(code)
+}
+
+func shouldStopAfterSelectedChannelRetries(c *gin.Context) bool {
+	if _, ok := c.Get(string(constant.ContextKeyTokenSpecificChannelId)); ok {
+		return true
+	}
+	return common.GetContextKeyBool(c, constant.ContextKeyUserPreferredChannel)
 }
 
 func processChannelError(c *gin.Context, channelError types.ChannelError, err *types.NewAPIError) {
@@ -615,7 +622,7 @@ taskRelayLoop:
 				if common.RetryTimes-retryParam.GetRetry() <= 0 {
 					break taskRelayLoop
 				}
-				if _, ok := c.Get("specific_channel_id"); ok {
+				if shouldStopAfterSelectedChannelRetries(c) {
 					break taskRelayLoop
 				}
 				break
