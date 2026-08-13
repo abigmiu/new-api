@@ -24,6 +24,13 @@ import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip,
@@ -42,6 +49,7 @@ import type {
 } from './types'
 
 const ranges: ChannelPerformanceRange[] = ['1h', '24h', '7d']
+const DEFAULT_GROUP = 'gpt-0.1倍率'
 
 function percent(value: number | null): string {
   return value == null || !Number.isFinite(value) ? '—' : `${value.toFixed(2)}%`
@@ -60,9 +68,10 @@ function throughput(value: number): string {
 export function ChannelPerformance() {
   const { t } = useTranslation()
   const [range, setRange] = useState<ChannelPerformanceRange>('1h')
+  const [group, setGroup] = useState(DEFAULT_GROUP)
   const performanceQuery = useQuery({
-    queryKey: ['channel-performance', range],
-    queryFn: () => getChannelPerformance(range),
+    queryKey: ['channel-performance', range, group],
+    queryFn: () => getChannelPerformance(range, group),
     refetchInterval: range === '1h' ? 30_000 : 60_000,
     staleTime: 15_000,
   })
@@ -118,7 +127,11 @@ export function ChannelPerformance() {
     channelContent = (
       <div className='grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3'>
         {channels.map((channel) => (
-          <ChannelCard key={channel.channel_id} channel={channel} />
+          <ChannelCard
+            key={channel.channel_id ?? channel.alias}
+            channel={channel}
+            isAdmin={performanceQuery.data?.data.is_admin ?? false}
+          />
         ))}
       </div>
     )
@@ -130,6 +143,18 @@ export function ChannelPerformance() {
         {t('Channel Performance')}
       </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
+        <Select value={group} onValueChange={(value) => setGroup(value ?? '')}>
+          <SelectTrigger className='w-40' aria-label={t('Group')}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {(performanceQuery.data?.data.groups ?? [group]).map((value) => (
+              <SelectItem key={value} value={value}>
+                {value}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <div className='flex items-center rounded-lg border p-0.5' role='group'>
           {ranges.map((value) => (
             <Button
@@ -215,7 +240,10 @@ function SummaryMetric(props: { label: string; value: string }) {
   )
 }
 
-function ChannelCard(props: { channel: ChannelPerformanceItem }) {
+function ChannelCard(props: {
+  channel: ChannelPerformanceItem
+  isAdmin: boolean
+}) {
   const { t } = useTranslation()
   const channel = props.channel
   return (
@@ -223,10 +251,12 @@ function ChannelCard(props: { channel: ChannelPerformanceItem }) {
       <header className='flex items-start justify-between gap-3 border-b px-4 py-3'>
         <div className='min-w-0'>
           <h3 className='truncate text-sm font-semibold'>
-            {channel.channel_name}
+            {channel.display_name}
           </h3>
           <p className='text-muted-foreground mt-0.5 text-xs'>
-            #{channel.channel_id} ·{' '}
+            {props.isAdmin && channel.channel_id
+              ? `#${channel.channel_id} · ${channel.alias} · `
+              : ''}
             {t(getChannelTypeLabel(channel.channel_type))}
           </p>
         </div>
@@ -347,23 +377,28 @@ function PerformanceBars(props: { series: ChannelPerformanceBucket[] }) {
                 />
               }
             />
-            <TooltipContent className='min-w-52 space-y-1.5'>
-              <div className='font-medium whitespace-nowrap'>
-                {dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')} –{' '}
-                {dayjs.unix(bucket.end_ts).format('HH:mm')}
-              </div>
-              <div className='font-mono text-sm font-semibold'>
+            <TooltipContent className='min-w-52'>
+              <p>
+                <span className='font-medium whitespace-nowrap'>
+                  {dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')} –{' '}
+                  {dayjs.unix(bucket.end_ts).format('HH:mm')}
+                </span>
+                <br />
+                {t('Success rate')}:{' '}
                 {hasData ? percent(bucket.success_rate) : '—'}
-              </div>
-              <div className='text-muted-foreground text-xs'>
-                {t('{{count}} requests', { count: bucket.attempt_count })}
-              </div>
-              <div className='text-muted-foreground text-xs'>
+                <br />
+                {t('Requests')}: {bucket.attempt_count.toLocaleString()}
+                <br />
                 {t('Average latency')}:{' '}
                 {hasData
                   ? duration(bucket.total_latency_ms / bucket.attempt_count)
                   : '—'}
-              </div>
+                <br />
+                {t('Average TTFT')}:{' '}
+                {hasData ? duration(bucket.avg_ttft_ms) : '—'}
+                <br />
+                TPS: {hasData ? throughput(bucket.avg_tps) : '—'}
+              </p>
             </TooltipContent>
           </Tooltip>
         )

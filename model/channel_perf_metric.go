@@ -57,14 +57,15 @@ func GetChannelPerfMetrics(startTs, endTs int64) ([]ChannelPerfMetric, error) {
 }
 
 type EnabledChannel struct {
-	Id   int    `json:"id"`
-	Name string `json:"name"`
-	Type int    `json:"type"`
+	Id    int    `json:"id"`
+	Name  string `json:"name"`
+	Type  int    `json:"type"`
+	Group string `json:"group"`
 }
 
 func GetEnabledChannelSummaries() ([]EnabledChannel, error) {
 	var channels []EnabledChannel
-	err := DB.Model(&Channel{}).Select("id, name, type").Where("status = ?", common.ChannelStatusEnabled).Order("id ASC").Find(&channels).Error
+	err := DB.Model(&Channel{}).Select("id, name, type, "+commonGroupCol).Where("status = ?", common.ChannelStatusEnabled).Order("id ASC").Find(&channels).Error
 	return channels, err
 }
 

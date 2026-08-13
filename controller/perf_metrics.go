@@ -2,9 +2,14 @@ package controller
 
 import (
 	"net/http"
+	"sort"
 	"strconv"
+	"strings"
 
+	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
+	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -82,6 +87,16 @@ func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupRes
 }
 
 func GetChannelPerformance(c *gin.Context) {
+	group := strings.TrimSpace(c.Query("group"))
+	if group == "" {
+		group = "gpt-0.1倍率"
+	}
+	isAdmin := c.GetInt("role") >= common.RoleAdminUser
+	groups := getChannelPerformanceGroups(common.GetContextKeyString(c, constant.ContextKeyUserGroup), isAdmin)
+	if _, ok := groups[group]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid group"})
+		return
+	}
 	hours := 24
 	switch c.Query("range") {
 	case "1h":
@@ -94,5 +109,54 @@ func GetChannelPerformance(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
+	if err := prepareChannelPerformanceResponse(&result, group, groups, isAdmin); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
+
+func getChannelPerformanceGroups(userGroup string, isAdmin bool) map[string]struct{} {
+	if !isAdmin {
+		return getUserPreferenceGroups(userGroup)
+	}
+	groups := make(map[string]struct{})
+	for group := range ratio_setting.GetGroupRatioCopy() {
+		if group != "auto" {
+			groups[group] = struct{}{}
+		}
+	}
+	return groups
+}
+
+func prepareChannelPerformanceResponse(result *perfmetrics.ChannelPerformanceResult, group string, groups map[string]struct{}, isAdmin bool) error {
+	result.Groups = make([]string, 0, len(groups))
+	for name := range groups {
+		result.Groups = append(result.Groups, name)
+	}
+	sort.Strings(result.Groups)
+	result.SelectedGroup = group
+	result.IsAdmin = isAdmin
+
+	channels := result.Channels[:0]
+	for _, channel := range result.Channels {
+		if !lo.Contains(channel.Groups, group) {
+			continue
+		}
+		alias, err := service.EncryptChannelAlias(group, channel.ChannelID)
+		if err != nil {
+			return err
+		}
+		channel.Alias = alias
+		if isAdmin {
+			channel.DisplayName = channel.ChannelName
+		} else {
+			channel.DisplayName = group + "-" + alias
+			channel.ChannelID = 0
+			channel.ChannelName = ""
+		}
+		channels = append(channels, channel)
+	}
+	result.Channels = channels
+	return nil
 }

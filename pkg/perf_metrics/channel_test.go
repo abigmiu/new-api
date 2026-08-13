@@ -141,7 +141,7 @@ func TestChannelRangeConfigReturnsFixedBucketCounts(t *testing.T) {
 		hours, count int
 		interval     int64
 	}{
-		{hours: 1, count: 12, interval: 300},
+		{hours: 1, count: 30, interval: 120},
 		{hours: 24, count: 48, interval: 1800},
 		{hours: 168, count: 28, interval: 21600},
 	}
@@ -153,6 +153,21 @@ func TestChannelRangeConfigReturnsFixedBucketCounts(t *testing.T) {
 		assert.EqualValues(t, 0, start%interval)
 		assert.EqualValues(t, count-1, (now-now%interval-start)/interval)
 	}
+}
+
+func TestBuildChannelBucketIncludesInteractivePerformanceDetails(t *testing.T) {
+	bucket := buildChannelBucket(120, 240, channelCounters{
+		attemptCount:   4,
+		successCount:   3,
+		totalLatencyMs: 4000,
+		ttftSumMs:      900,
+		ttftCount:      3,
+		outputTokens:   120,
+		generationMs:   3000,
+	})
+
+	assert.EqualValues(t, 300, bucket.AvgTtftMs)
+	assert.Equal(t, 40.0, bucket.AvgTps)
 }
 
 func TestChannelRedisAggregatesActiveBucketAcrossModels(t *testing.T) {

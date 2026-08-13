@@ -25,13 +25,17 @@ export type ChannelPerformanceBucket = {
   success_count: number
   total_latency_ms: number
   success_rate: number
+  avg_ttft_ms: number
+  avg_tps: number
   cache_hit_rate: number | null
   cache_rate: number | null
 }
 
 export type ChannelPerformanceItem = {
-  channel_id: number
-  channel_name: string
+  channel_id?: number
+  channel_name?: string
+  display_name: string
+  alias: string
   channel_type: number
   attempt_count: number
   success_count: number
@@ -54,6 +58,9 @@ export type ChannelPerformanceResponse = {
   message?: string
   data: {
     updated_at: number
+    groups: string[]
+    selected_group: string
+    is_admin: boolean
     channels: ChannelPerformanceItem[]
   }
 }

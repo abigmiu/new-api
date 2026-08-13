@@ -83,6 +83,11 @@ export function useSidebarData(): SidebarData {
             icon: LayoutDashboard,
           },
           {
+            title: t('Channel Performance'),
+            url: '/performance',
+            icon: Gauge,
+          },
+          {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
@@ -130,12 +135,6 @@ export function useSidebarData(): SidebarData {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
-          },
-          {
-            title: t('Channel Performance'),
-            url: '/performance',
-            icon: Gauge,
-            requiredRole: ROLE.ADMIN,
           },
           {
             title: t('Models'),

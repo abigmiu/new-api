@@ -3,6 +3,7 @@ package perfmetrics
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -50,6 +51,8 @@ type atomicChannelBucket struct {
 }
 
 var channelHotBuckets sync.Map
+
+const channelBucketSeconds int64 = 120
 
 func RecordRelaySampleWithUsage(info *relaycommon.RelayInfo, success bool, usage *dto.Usage, billed bool) {
 	if !perf_metrics_setting.GetSetting().Enabled || info == nil || info.ChannelId == 0 || info.OriginModelName == "" {
@@ -155,7 +158,7 @@ func recordChannelSampleAt(sample channelSample, now int64) {
 	recordChannelRedis(key, sample)
 }
 
-func channelBucketStart(ts int64) int64 { return ts - ts%300 }
+func channelBucketStart(ts int64) int64 { return ts - ts%channelBucketSeconds }
 
 func snapshotChannelBucket(bucket *atomicChannelBucket) channelCounters {
 	return channelCounters{
@@ -221,8 +224,10 @@ func flushChannelCompletedBuckets() {
 }
 
 type ChannelPerformance struct {
-	ChannelID        int                        `json:"channel_id"`
-	ChannelName      string                     `json:"channel_name"`
+	ChannelID        int                        `json:"channel_id,omitempty"`
+	ChannelName      string                     `json:"channel_name,omitempty"`
+	DisplayName      string                     `json:"display_name"`
+	Alias            string                     `json:"alias"`
 	ChannelType      int                        `json:"channel_type"`
 	AttemptCount     int64                      `json:"attempt_count"`
 	SuccessCount     int64                      `json:"success_count"`
@@ -238,6 +243,7 @@ type ChannelPerformance struct {
 	LogicalInput     int64                      `json:"logical_input_tokens"`
 	ActiveModelCount int                        `json:"active_model_count"`
 	Series           []ChannelPerformanceBucket `json:"series"`
+	Groups           []string                   `json:"-"`
 }
 
 type ChannelPerformanceBucket struct {
@@ -247,13 +253,18 @@ type ChannelPerformanceBucket struct {
 	SuccessCount   int64    `json:"success_count"`
 	TotalLatencyMs int64    `json:"total_latency_ms"`
 	SuccessRate    float64  `json:"success_rate"`
+	AvgTtftMs      int64    `json:"avg_ttft_ms"`
+	AvgTps         float64  `json:"avg_tps"`
 	CacheHitRate   *float64 `json:"cache_hit_rate"`
 	CacheRate      *float64 `json:"cache_rate"`
 }
 
 type ChannelPerformanceResult struct {
-	UpdatedAt int64                `json:"updated_at"`
-	Channels  []ChannelPerformance `json:"channels"`
+	UpdatedAt     int64                `json:"updated_at"`
+	Groups        []string             `json:"groups"`
+	SelectedGroup string               `json:"selected_group"`
+	IsAdmin       bool                 `json:"is_admin"`
+	Channels      []ChannelPerformance `json:"channels"`
 }
 
 func QueryChannelPerformance(hours int) (ChannelPerformanceResult, error) {
@@ -436,8 +447,8 @@ func channelRedisCounters(values map[string]string) channelCounters {
 }
 
 func channelRangeConfig(hours int, now int64) (interval int64, bucketCount int, start int64) {
-	interval = 300
-	bucketCount = 12
+	interval = channelBucketSeconds
+	bucketCount = 30
 	if hours == 24 {
 		interval = 1800
 		bucketCount = 48
@@ -470,11 +481,15 @@ func addChannelCounters(current, value channelCounters) channelCounters {
 }
 
 func buildChannelBucket(start, end int64, value channelCounters) ChannelPerformanceBucket {
-	return ChannelPerformanceBucket{StartTs: start, EndTs: end, AttemptCount: value.attemptCount, SuccessCount: value.successCount, TotalLatencyMs: value.totalLatencyMs, SuccessRate: rate(value.successCount, value.attemptCount), CacheHitRate: cacheRate(value.cacheHitCount, value.cacheReportCount), CacheRate: cacheRate(value.cachedInputTokens, value.logicalInputTokens)}
+	return ChannelPerformanceBucket{StartTs: start, EndTs: end, AttemptCount: value.attemptCount, SuccessCount: value.successCount, TotalLatencyMs: value.totalLatencyMs, SuccessRate: rate(value.successCount, value.attemptCount), AvgTtftMs: avgInt(value.ttftSumMs, value.ttftCount), AvgTps: channelAvgTps(value.outputTokens, value.generationMs), CacheHitRate: cacheRate(value.cacheHitCount, value.cacheReportCount), CacheRate: cacheRate(value.cachedInputTokens, value.logicalInputTokens)}
 }
 
 func buildChannelPerformance(channel model.EnabledChannel, value channelCounters, modelCount int, series []ChannelPerformanceBucket) ChannelPerformance {
-	return ChannelPerformance{ChannelID: channel.Id, ChannelName: channel.Name, ChannelType: channel.Type, AttemptCount: value.attemptCount, SuccessCount: value.successCount, SuccessRate: rate(value.successCount, value.attemptCount), AvgLatencyMs: avgInt(value.totalLatencyMs, value.attemptCount), AvgTtftMs: avgInt(value.ttftSumMs, value.ttftCount), AvgTps: channelAvgTps(value.outputTokens, value.generationMs), CacheHitRate: cacheRate(value.cacheHitCount, value.cacheReportCount), CacheRate: cacheRate(value.cachedInputTokens, value.logicalInputTokens), CacheReportCount: value.cacheReportCount, CacheHitCount: value.cacheHitCount, CachedInput: value.cachedInputTokens, LogicalInput: value.logicalInputTokens, ActiveModelCount: modelCount, Series: series}
+	groups := strings.Split(strings.Trim(channel.Group, ","), ",")
+	for i, group := range groups {
+		groups[i] = strings.TrimSpace(group)
+	}
+	return ChannelPerformance{ChannelID: channel.Id, ChannelName: channel.Name, ChannelType: channel.Type, AttemptCount: value.attemptCount, SuccessCount: value.successCount, SuccessRate: rate(value.successCount, value.attemptCount), AvgLatencyMs: avgInt(value.totalLatencyMs, value.attemptCount), AvgTtftMs: avgInt(value.ttftSumMs, value.ttftCount), AvgTps: channelAvgTps(value.outputTokens, value.generationMs), CacheHitRate: cacheRate(value.cacheHitCount, value.cacheReportCount), CacheRate: cacheRate(value.cachedInputTokens, value.logicalInputTokens), CacheReportCount: value.cacheReportCount, CacheHitCount: value.cacheHitCount, CachedInput: value.cachedInputTokens, LogicalInput: value.logicalInputTokens, ActiveModelCount: modelCount, Series: series, Groups: groups}
 }
 
 func rate(n, d int64) float64 {
