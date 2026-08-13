@@ -159,6 +159,27 @@ func TestOaiResponsesStreamHandlerReturnsRetryableErrorForServerOverload(t *test
 	}
 }
 
+func TestOaiResponsesStreamHandlerRetriesServerOverloadAfterErrorEvent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	oldStreamingTimeout := constant.StreamingTimeout
+	constant.StreamingTimeout = 30
+	t.Cleanup(func() { constant.StreamingTimeout = oldStreamingTimeout })
+
+	body := "data: {\"type\":\"response.created\",\"response\":{\"status\":\"in_progress\"}}\n\n" +
+		"data: {\"type\":\"response.in_progress\",\"response\":{\"status\":\"in_progress\"}}\n\n" +
+		"data: {\"type\":\"error\",\"error\":{\"code\":\"server_is_overloaded\"}}\n\n" +
+		"data: {\"type\":\"response.failed\",\"response\":{\"status\":\"failed\",\"error\":{\"message\":\"Selected model is at capacity.\",\"type\":\"service_unavailable_error\",\"code\":\"server_is_overloaded\"}}}\n\n"
+	c, recorder, resp := newEmptyResponseTestContext("/v1/responses", body, "text/event-stream")
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{}, DisablePing: true}
+
+	_, apiErr := OaiResponsesStreamHandler(c, info, resp)
+
+	require.NotNil(t, apiErr)
+	assert.Equal(t, types.ErrorCode("server_is_overloaded"), apiErr.GetErrorCode())
+	assert.Equal(t, http.StatusServiceUnavailable, apiErr.StatusCode)
+	assert.Empty(t, recorder.Body.String())
+}
+
 func TestOaiResponsesStreamHandlerRetriesEmptyCompletedResponse(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	oldStreamingTimeout := constant.StreamingTimeout

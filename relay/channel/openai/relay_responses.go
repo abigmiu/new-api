@@ -166,7 +166,8 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 				return
 			}
 			if streamResponse.Type == "response.created" || streamResponse.Type == "response.in_progress" ||
-				streamResponse.Type == "response.queued" || strings.HasSuffix(streamResponse.Type, ".added") {
+				streamResponse.Type == "response.queued" || streamResponse.Type == "error" ||
+				strings.HasSuffix(streamResponse.Type, ".added") {
 				pendingStreamData = append(pendingStreamData, struct {
 					response dto.ResponsesStreamResponse
 					data     string
