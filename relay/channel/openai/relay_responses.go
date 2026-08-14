@@ -101,6 +101,8 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 	outputItemEvents := 0
 	completedEvents := 0
 	failedEvents := 0
+	failedErrorTypes := make([]string, 0, 5)
+	failedErrorCodes := make([]string, 0, 5)
 	usagePresent := false
 	responseOutputItems := 0
 	var pendingStreamData []struct {
@@ -157,6 +159,16 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			responseOutputItems += len(streamResponse.Response.Output)
 			if streamResponse.Response.Usage != nil {
 				usagePresent = true
+			}
+			if streamResponse.Type == "response.failed" {
+				if oaiError := streamResponse.Response.GetOpenAIError(); oaiError != nil {
+					if oaiError.Type != "" && len(failedErrorTypes) < cap(failedErrorTypes) {
+						failedErrorTypes = append(failedErrorTypes, oaiError.Type)
+					}
+					if code, ok := oaiError.Code.(string); ok && code != "" && len(failedErrorCodes) < cap(failedErrorCodes) {
+						failedErrorCodes = append(failedErrorCodes, code)
+					}
+				}
 			}
 		}
 
@@ -243,7 +255,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 			}
 		}
 	})
-	logger.LogInfo(c, fmt.Sprintf("responses stream summary: events=%d types=%v non_empty_delta_events=%d output_item_events=%d response_output_items=%d completed_events=%d failed_events=%d usage_present=%t input_tokens=%d output_tokens=%d total_tokens=%d committed=%t pending_events=%d end_reason=%s", eventCount, eventTypes, nonEmptyDeltaEvents, outputItemEvents, responseOutputItems, completedEvents, failedEvents, usagePresent, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, streamCommitted, len(pendingStreamData), info.StreamStatus.Summary()))
+	logger.LogInfo(c, fmt.Sprintf("responses stream summary: events=%d types=%v non_empty_delta_events=%d output_item_events=%d response_output_items=%d completed_events=%d failed_events=%d failed_error_types=%v failed_error_codes=%v usage_present=%t input_tokens=%d output_tokens=%d total_tokens=%d committed=%t pending_events=%d end_reason=%s", eventCount, eventTypes, nonEmptyDeltaEvents, outputItemEvents, responseOutputItems, completedEvents, failedEvents, failedErrorTypes, failedErrorCodes, usagePresent, usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens, streamCommitted, len(pendingStreamData), info.StreamStatus.Summary()))
 
 	if streamError != nil {
 		return nil, streamError
