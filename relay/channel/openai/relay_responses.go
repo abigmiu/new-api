@@ -123,7 +123,7 @@ func OaiResponsesStreamHandler(c *gin.Context, info *relaycommon.RelayInfo, resp
 		if streamResponse.Type == "response.failed" && streamResponse.Response != nil {
 			if oaiError := streamResponse.Response.GetOpenAIError(); oaiError != nil {
 				code, _ := oaiError.Code.(string)
-				if !streamCommitted && (code == "server_is_overloaded" || code == "slow_down") {
+				if !streamCommitted && (code == "server_is_overloaded" || code == "slow_down" || code == "server_error") {
 					if oaiError.Message == "" {
 						oaiError.Message = "OpenAI server is overloaded"
 					}
