@@ -24,12 +24,11 @@ import type {
 } from './types'
 
 export async function getChannelPerformance(
-  range: ChannelPerformanceRange,
-  group: string
+  range: ChannelPerformanceRange
 ): Promise<ChannelPerformanceResponse> {
   const response = await api.get<ChannelPerformanceResponse>(
     '/api/channel-performance',
-    { params: { range, group } }
+    { params: { range } }
   )
   return response.data
 }

@@ -3,7 +3,6 @@ package perfmetrics
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -243,7 +242,6 @@ type ChannelPerformance struct {
 	LogicalInput     int64                      `json:"logical_input_tokens"`
 	ActiveModelCount int                        `json:"active_model_count"`
 	Series           []ChannelPerformanceBucket `json:"series"`
-	Groups           []string                   `json:"-"`
 }
 
 type ChannelPerformanceBucket struct {
@@ -485,11 +483,7 @@ func buildChannelBucket(start, end int64, value channelCounters) ChannelPerforma
 }
 
 func buildChannelPerformance(channel model.EnabledChannel, value channelCounters, modelCount int, series []ChannelPerformanceBucket) ChannelPerformance {
-	groups := strings.Split(strings.Trim(channel.Group, ","), ",")
-	for i, group := range groups {
-		groups[i] = strings.TrimSpace(group)
-	}
-	return ChannelPerformance{ChannelID: channel.Id, ChannelName: channel.Name, ChannelType: channel.Type, AttemptCount: value.attemptCount, SuccessCount: value.successCount, SuccessRate: rate(value.successCount, value.attemptCount), AvgLatencyMs: avgInt(value.totalLatencyMs, value.attemptCount), AvgTtftMs: avgInt(value.ttftSumMs, value.ttftCount), AvgTps: channelAvgTps(value.outputTokens, value.generationMs), CacheHitRate: cacheRate(value.cacheHitCount, value.cacheReportCount), CacheRate: cacheRate(value.cachedInputTokens, value.logicalInputTokens), CacheReportCount: value.cacheReportCount, CacheHitCount: value.cacheHitCount, CachedInput: value.cachedInputTokens, LogicalInput: value.logicalInputTokens, ActiveModelCount: modelCount, Series: series, Groups: groups}
+	return ChannelPerformance{ChannelID: channel.Id, ChannelName: channel.Name, ChannelType: channel.Type, AttemptCount: value.attemptCount, SuccessCount: value.successCount, SuccessRate: rate(value.successCount, value.attemptCount), AvgLatencyMs: avgInt(value.totalLatencyMs, value.attemptCount), AvgTtftMs: avgInt(value.ttftSumMs, value.ttftCount), AvgTps: channelAvgTps(value.outputTokens, value.generationMs), CacheHitRate: cacheRate(value.cacheHitCount, value.cacheReportCount), CacheRate: cacheRate(value.cachedInputTokens, value.logicalInputTokens), CacheReportCount: value.cacheReportCount, CacheHitCount: value.cacheHitCount, CachedInput: value.cachedInputTokens, LogicalInput: value.logicalInputTokens, ActiveModelCount: modelCount, Series: series}
 }
 
 func rate(n, d int64) float64 {

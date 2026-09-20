@@ -114,6 +114,12 @@ export function UpstreamGroups() {
         cell: (group) => group.local_display_name,
       },
       {
+        id: 'description',
+        header: t('Description'),
+        className: 'min-w-64',
+        cell: (group) => group.remote_description || '-',
+      },
+      {
         id: 'source',
         header: t('Source price'),
         cellClassName: 'font-mono tabular-nums',
@@ -212,7 +218,9 @@ export function UpstreamGroups() {
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
           <StaticDataTable
+            className='h-full min-h-0 overflow-auto **:data-[slot=table-container]:overflow-visible'
             columns={columns}
+            containerProps={{ id: 'upstream-groups-scroll-area' }}
             data={groups}
             getRowKey={(group) => group.id}
             emptyContent={

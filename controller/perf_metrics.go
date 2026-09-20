@@ -4,12 +4,9 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"strings"
 
-	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
 
 	"github.com/gin-gonic/gin"
@@ -87,76 +84,105 @@ func filterActiveGroups(groups []perfmetrics.GroupResult) []perfmetrics.GroupRes
 }
 
 func GetChannelPerformance(c *gin.Context) {
-	group := strings.TrimSpace(c.Query("group"))
-	if group == "" {
-		group = "gpt-0.1倍率"
-	}
-	isAdmin := c.GetInt("role") >= common.RoleAdminUser
-	groups := getChannelPerformanceGroups(common.GetContextKeyString(c, constant.ContextKeyUserGroup), isAdmin)
-	if _, ok := groups[group]; !ok {
-		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "invalid group"})
-		return
-	}
 	hours := 24
+	selectedRange := "24h"
 	switch c.Query("range") {
 	case "1h":
 		hours = 1
+		selectedRange = "1h"
 	case "7d":
 		hours = 24 * 7
+		selectedRange = "7d"
 	}
 	result, err := perfmetrics.QueryChannelPerformance(hours)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	if err := prepareChannelPerformanceResponse(&result, group, groups, isAdmin); err != nil {
+	bindings, err := model.ListActiveUpstreamGroupBindings()
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+	response := prepareManagedChannelPerformanceResponse(result, bindings)
+	response.Range = selectedRange
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": response})
 }
 
-func getChannelPerformanceGroups(userGroup string, isAdmin bool) map[string]struct{} {
-	if !isAdmin {
-		return getUserPreferenceGroups(userGroup)
-	}
-	groups := make(map[string]struct{})
-	for group := range ratio_setting.GetGroupRatioCopy() {
-		if group != "auto" {
-			groups[group] = struct{}{}
-		}
-	}
-	return groups
+type managedChannelPerformanceResponse struct {
+	UpdatedAt int64                            `json:"updated_at"`
+	Range     string                           `json:"range"`
+	Suppliers []managedChannelPerformanceGroup `json:"suppliers"`
 }
 
-func prepareChannelPerformanceResponse(result *perfmetrics.ChannelPerformanceResult, group string, groups map[string]struct{}, isAdmin bool) error {
-	result.Groups = make([]string, 0, len(groups))
-	for name := range groups {
-		result.Groups = append(result.Groups, name)
-	}
-	sort.Strings(result.Groups)
-	result.SelectedGroup = group
-	result.IsAdmin = isAdmin
+type managedChannelPerformanceGroup struct {
+	UpstreamChannelId   int64                     `json:"upstream_channel_id"`
+	UpstreamChannelName string                    `json:"upstream_channel_name"`
+	Groups              []managedGroupPerformance `json:"groups"`
+}
 
-	channels := result.Channels[:0]
-	for _, channel := range result.Channels {
-		if !lo.Contains(channel.Groups, group) {
+type managedGroupPerformance struct {
+	BindingId    int64                                  `json:"binding_id"`
+	GroupName    string                                 `json:"group_name"`
+	Description  string                                 `json:"description"`
+	SaleRatio    string                                 `json:"sale_ratio"`
+	AttemptCount int64                                  `json:"attempt_count"`
+	SuccessCount int64                                  `json:"success_count"`
+	SuccessRate  float64                                `json:"success_rate"`
+	AvgLatencyMs int64                                  `json:"avg_latency_ms"`
+	AvgTtftMs    int64                                  `json:"avg_ttft_ms"`
+	AvgTps       float64                                `json:"avg_tps"`
+	CacheHitRate *float64                               `json:"cache_hit_rate"`
+	CacheRate    *float64                               `json:"cache_rate"`
+	Series       []perfmetrics.ChannelPerformanceBucket `json:"series"`
+}
+
+func prepareManagedChannelPerformanceResponse(result perfmetrics.ChannelPerformanceResult, bindings []model.UpstreamGroupBinding) managedChannelPerformanceResponse {
+	metricsByChannel := make(map[int]perfmetrics.ChannelPerformance, len(result.Channels))
+	for _, metric := range result.Channels {
+		metricsByChannel[metric.ChannelID] = metric
+	}
+	supplierIndex := make(map[int64]int, len(bindings))
+	response := managedChannelPerformanceResponse{UpdatedAt: result.UpdatedAt, Suppliers: make([]managedChannelPerformanceGroup, 0)}
+	for _, binding := range bindings {
+		if binding.LocalChannelId == nil {
 			continue
 		}
-		alias, err := service.EncryptChannelAlias(group, channel.ChannelID)
-		if err != nil {
-			return err
+		index, exists := supplierIndex[binding.UpstreamChannelId]
+		if !exists {
+			index = len(response.Suppliers)
+			supplierIndex[binding.UpstreamChannelId] = index
+			response.Suppliers = append(response.Suppliers, managedChannelPerformanceGroup{
+				UpstreamChannelId:   binding.UpstreamChannelId,
+				UpstreamChannelName: binding.UpstreamChannelName,
+				Groups:              make([]managedGroupPerformance, 0),
+			})
 		}
-		channel.Alias = alias
-		if isAdmin {
-			channel.DisplayName = channel.ChannelName
-		} else {
-			channel.DisplayName = group + "-" + alias
-			channel.ChannelID = 0
-			channel.ChannelName = ""
+		metric := metricsByChannel[*binding.LocalChannelId]
+		series := metric.Series
+		if series == nil {
+			series = make([]perfmetrics.ChannelPerformanceBucket, 0)
 		}
-		channels = append(channels, channel)
+		response.Suppliers[index].Groups = append(response.Suppliers[index].Groups, managedGroupPerformance{
+			BindingId: binding.Id, GroupName: binding.RemoteGroupName, Description: binding.RemoteDescription,
+			SaleRatio: binding.SaleRatio, AttemptCount: metric.AttemptCount, SuccessCount: metric.SuccessCount,
+			SuccessRate: metric.SuccessRate, AvgLatencyMs: metric.AvgLatencyMs, AvgTtftMs: metric.AvgTtftMs,
+			AvgTps: metric.AvgTps, CacheHitRate: metric.CacheHitRate, CacheRate: metric.CacheRate, Series: series,
+		})
 	}
-	result.Channels = channels
-	return nil
+	sort.Slice(response.Suppliers, func(i, j int) bool {
+		if response.Suppliers[i].UpstreamChannelName == response.Suppliers[j].UpstreamChannelName {
+			return response.Suppliers[i].UpstreamChannelId < response.Suppliers[j].UpstreamChannelId
+		}
+		return response.Suppliers[i].UpstreamChannelName < response.Suppliers[j].UpstreamChannelName
+	})
+	for i := range response.Suppliers {
+		sort.Slice(response.Suppliers[i].Groups, func(a, b int) bool {
+			if response.Suppliers[i].Groups[a].GroupName == response.Suppliers[i].Groups[b].GroupName {
+				return response.Suppliers[i].Groups[a].BindingId < response.Suppliers[i].Groups[b].BindingId
+			}
+			return response.Suppliers[i].Groups[a].GroupName < response.Suppliers[i].Groups[b].GroupName
+		})
+	}
+	return response
 }

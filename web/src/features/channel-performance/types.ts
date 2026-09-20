@@ -31,12 +31,11 @@ export type ChannelPerformanceBucket = {
   cache_rate: number | null
 }
 
-export type ChannelPerformanceItem = {
-  channel_id?: number
-  channel_name?: string
-  display_name: string
-  alias: string
-  channel_type: number
+export type ManagedGroupPerformance = {
+  binding_id: number
+  group_name: string
+  description: string
+  sale_ratio: string
   attempt_count: number
   success_count: number
   success_rate: number
@@ -45,12 +44,13 @@ export type ChannelPerformanceItem = {
   avg_tps: number
   cache_hit_rate: number | null
   cache_rate: number | null
-  cache_report_count: number
-  cache_hit_count: number
-  cached_input_tokens: number
-  logical_input_tokens: number
-  active_model_count: number
   series: ChannelPerformanceBucket[]
+}
+
+export type ChannelPerformanceSupplier = {
+  upstream_channel_id: number
+  upstream_channel_name: string
+  groups: ManagedGroupPerformance[]
 }
 
 export type ChannelPerformanceResponse = {
@@ -58,9 +58,7 @@ export type ChannelPerformanceResponse = {
   message?: string
   data: {
     updated_at: number
-    groups: string[]
-    selected_group: string
-    is_admin: boolean
-    channels: ChannelPerformanceItem[]
+    range: ChannelPerformanceRange
+    suppliers: ChannelPerformanceSupplier[]
   }
 }

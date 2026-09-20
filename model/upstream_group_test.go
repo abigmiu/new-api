@@ -58,6 +58,23 @@ func TestTokenGroupBindingBecomesPriceChangedWithoutRowUpdate(t *testing.T) {
 	assert.Equal(t, int64(1), relation.AcceptedPriceVersion)
 }
 
+func TestListActiveUpstreamGroupBindingsOnlyReturnsGloballyEnabledActiveGroups(t *testing.T) {
+	setupUpstreamGroupTestDB(t)
+	localChannelID := 1
+	groups := []UpstreamGroupBinding{
+		{Identity: "newapi:1:active", LocalGroup: "uo-1-active", DesiredEnabled: true, State: UpstreamGroupStateActive, LocalChannelId: &localChannelID},
+		{Identity: "newapi:1:disabled", LocalGroup: "uo-1-disabled", DesiredEnabled: false, State: UpstreamGroupStateActive, LocalChannelId: &localChannelID},
+		{Identity: "newapi:1:error", LocalGroup: "uo-1-error", DesiredEnabled: true, State: UpstreamGroupStateError, LocalChannelId: &localChannelID},
+	}
+	require.NoError(t, DB.Create(&groups).Error)
+
+	active, err := ListActiveUpstreamGroupBindings()
+
+	require.NoError(t, err)
+	require.Len(t, active, 1)
+	assert.Equal(t, "uo-1-active", active[0].LocalGroup)
+}
+
 func TestAcceptPriceOnlyUpdatesTargetTokenGroup(t *testing.T) {
 	setupUpstreamGroupTestDB(t)
 	group := UpstreamGroupBinding{

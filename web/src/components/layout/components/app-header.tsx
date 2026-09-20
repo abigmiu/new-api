@@ -16,11 +16,20 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { Link } from '@tanstack/react-router'
+import { Gauge } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+
 import { ConfigDrawer } from '@/components/config-drawer'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import { NotificationPopover } from '@/components/notification-popover'
 import { ProfileDropdown } from '@/components/profile-dropdown'
 import { Search } from '@/components/search'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { useNotifications } from '@/hooks/use-notifications'
 import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
@@ -103,6 +112,7 @@ export function AppHeader({
   showConfigDrawer = true,
   showProfileDropdown = true,
 }: AppHeaderProps) {
+  const { t } = useTranslation()
   // Prioritize dynamically generated links from backend
   const dynamicLinks = useTopNavLinks()
   const links = dynamicLinks.length > 0 ? dynamicLinks : navLinks
@@ -126,6 +136,23 @@ export function AppHeader({
             </div>
           )}
           {showSearch && <Search />}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Link
+                  to='/performance'
+                  className='text-muted-foreground hover:text-foreground inline-flex size-8 items-center justify-center rounded-md text-sm transition-colors sm:w-auto sm:gap-1.5 sm:px-2'
+                  aria-label={t('Channel Performance')}
+                />
+              }
+            >
+              <Gauge className='size-4' aria-hidden='true' />
+              <span className='hidden sm:inline'>
+                {t('Channel Performance')}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{t('Channel Performance')}</TooltipContent>
+          </Tooltip>
           {showNotifications && (
             <NotificationPopover
               open={notifications.popoverOpen}

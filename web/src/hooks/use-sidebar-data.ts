@@ -27,8 +27,6 @@ import {
   ListTodo,
   MessageSquare,
   Radio,
-  Gauge,
-  Route,
   ServerCog,
   Layers3,
   Settings,
@@ -84,11 +82,6 @@ export function useSidebarData(): SidebarData {
             icon: LayoutDashboard,
           },
           {
-            title: t('Channel Performance'),
-            url: '/performance',
-            icon: Gauge,
-          },
-          {
             title: t('API Keys'),
             url: '/keys',
             icon: Key,
@@ -120,11 +113,6 @@ export function useSidebarData(): SidebarData {
             title: t('Profile'),
             url: '/profile',
             icon: User,
-          },
-          {
-            title: t('Channel Preferences'),
-            url: '/channel-preferences',
-            icon: Route,
           },
         ],
       },

@@ -96,7 +96,6 @@ import {
 } from './api-key-group-combobox'
 import { useApiKeys } from './api-keys-provider'
 import { AutoGroupOrderEditor } from './auto-group-order-editor'
-import { ChannelPreferenceHint } from './channel-preference-hint'
 import { ManagedTokenGroups } from './managed-token-groups'
 
 type ApiKeyMutateDrawerProps = {
@@ -541,7 +540,6 @@ export function ApiKeysMutateDrawer({
                     <FormItem>
                       <div className='flex flex-col gap-2'>
                         <FormLabel>{t('Group')}</FormLabel>
-                        <ChannelPreferenceHint />
                       </div>
                       <FormControl>
                         <ApiKeyGroupCombobox

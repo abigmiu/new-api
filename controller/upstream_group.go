@@ -33,6 +33,7 @@ func ListUpstreamGroups(c *gin.Context) {
 		UpstreamChannelName string `json:"upstream_channel_name"`
 		UpstreamChannelType string `json:"upstream_channel_type"`
 		RemoteGroupName     string `json:"remote_group_name"`
+		RemoteDescription   string `json:"remote_description"`
 		LocalGroup          string `json:"local_group"`
 		LocalDisplayName    string `json:"local_display_name"`
 		LocalChannelId      *int   `json:"local_channel_id,omitempty"`
@@ -54,6 +55,7 @@ func ListUpstreamGroups(c *gin.Context) {
 			UpstreamChannelName: binding.UpstreamChannelName,
 			UpstreamChannelType: binding.UpstreamChannelType,
 			RemoteGroupName:     binding.RemoteGroupName,
+			RemoteDescription:   binding.RemoteDescription,
 			LocalGroup:          binding.LocalGroup,
 			LocalDisplayName:    binding.LocalDisplayName,
 			LocalChannelId:      binding.LocalChannelId,

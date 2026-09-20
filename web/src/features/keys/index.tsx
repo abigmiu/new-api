@@ -24,7 +24,6 @@ import { ApiKeysDialogs } from './components/api-keys-dialogs'
 import { ApiKeysPrimaryButtons } from './components/api-keys-primary-buttons'
 import { ApiKeysProvider } from './components/api-keys-provider'
 import { ApiKeysTable } from './components/api-keys-table'
-import { ChannelPreferenceHint } from './components/channel-preference-hint'
 
 export function ApiKeys() {
   const { t } = useTranslation()
@@ -32,10 +31,7 @@ export function ApiKeys() {
     <ApiKeysProvider>
       <SectionPageLayout fixedContent>
         <SectionPageLayout.Title>
-          <span className='flex min-w-0 flex-wrap items-center gap-2'>
-            <span className='truncate'>{t('API Keys')}</span>
-            <ChannelPreferenceHint />
-          </span>
+          <span className='truncate'>{t('API Keys')}</span>
         </SectionPageLayout.Title>
         <SectionPageLayout.Actions>
           <ApiKeysPrimaryButtons />

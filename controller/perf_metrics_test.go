@@ -3,45 +3,56 @@ package controller
 import (
 	"testing"
 
-	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
-	"github.com/QuantumNous/new-api/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestPrepareChannelPerformanceResponseUsesRoleSafeChannelIdentity(t *testing.T) {
-	_, _ = setupChannelPreferenceTest(t)
-	groups := map[string]struct{}{"gpt-0.1倍率": {}, "vip": {}}
-	base := []perfmetrics.ChannelPerformance{
-		{ChannelID: 17, ChannelName: "secret-upstream", Groups: []string{"gpt-0.1倍率", "vip"}},
-		{ChannelID: 18, ChannelName: "other-upstream", Groups: []string{"vip"}},
+func TestPrepareManagedChannelPerformanceResponseGroupsEnabledBindingsBySupplier(t *testing.T) {
+	localChannelA := 17
+	localChannelB := 18
+	bindings := []model.UpstreamGroupBinding{
+		{Id: 3, UpstreamChannelId: 2, UpstreamChannelName: "Supplier B", RemoteGroupName: "Standard", RemoteDescription: "Stable", SaleRatio: "0.089", LocalChannelId: &localChannelA},
+		{Id: 2, UpstreamChannelId: 1, UpstreamChannelName: "Supplier A", RemoteGroupName: "Pro", RemoteDescription: "Fast", SaleRatio: "0.119", LocalChannelId: &localChannelB},
+		{Id: 1, UpstreamChannelId: 1, UpstreamChannelName: "Supplier A", RemoteGroupName: "Basic", SaleRatio: "0.059", LocalChannelId: &localChannelA},
+		{Id: 4, UpstreamChannelId: 3, UpstreamChannelName: "Unbound", RemoteGroupName: "Ignored"},
+	}
+	result := perfmetrics.ChannelPerformanceResult{
+		UpdatedAt: 123,
+		Channels: []perfmetrics.ChannelPerformance{
+			{ChannelID: localChannelA, AttemptCount: 10, SuccessCount: 9, SuccessRate: 90, AvgLatencyMs: 800},
+			{ChannelID: localChannelB, AttemptCount: 20, SuccessCount: 20, SuccessRate: 100, AvgLatencyMs: 400},
+		},
 	}
 
-	admin := perfmetrics.ChannelPerformanceResult{Channels: append([]perfmetrics.ChannelPerformance(nil), base...)}
-	require.NoError(t, prepareChannelPerformanceResponse(&admin, "gpt-0.1倍率", groups, true))
-	require.Len(t, admin.Channels, 1)
-	assert.Equal(t, 17, admin.Channels[0].ChannelID)
-	assert.Equal(t, "secret-upstream", admin.Channels[0].ChannelName)
-	assert.Equal(t, "secret-upstream", admin.Channels[0].DisplayName)
-	assert.NotEmpty(t, admin.Channels[0].Alias)
-	assert.True(t, admin.IsAdmin)
-	assert.Equal(t, []string{"gpt-0.1倍率", "vip"}, admin.Groups)
+	response := prepareManagedChannelPerformanceResponse(result, bindings)
 
-	user := perfmetrics.ChannelPerformanceResult{Channels: append([]perfmetrics.ChannelPerformance(nil), base...)}
-	require.NoError(t, prepareChannelPerformanceResponse(&user, "gpt-0.1倍率", groups, false))
-	require.Len(t, user.Channels, 1)
-	assert.Zero(t, user.Channels[0].ChannelID)
-	assert.Empty(t, user.Channels[0].ChannelName)
-	assert.Equal(t, "gpt-0.1倍率-"+user.Channels[0].Alias, user.Channels[0].DisplayName)
-	assert.False(t, user.IsAdmin)
+	assert.Equal(t, int64(123), response.UpdatedAt)
+	require.Len(t, response.Suppliers, 2)
+	assert.Equal(t, "Supplier A", response.Suppliers[0].UpstreamChannelName)
+	require.Len(t, response.Suppliers[0].Groups, 2)
+	assert.Equal(t, "Basic", response.Suppliers[0].Groups[0].GroupName)
+	assert.Equal(t, int64(10), response.Suppliers[0].Groups[0].AttemptCount)
+	assert.Equal(t, "Pro", response.Suppliers[0].Groups[1].GroupName)
+	assert.Equal(t, int64(20), response.Suppliers[0].Groups[1].AttemptCount)
+	assert.Equal(t, "Supplier B", response.Suppliers[1].UpstreamChannelName)
+	assert.Equal(t, "Stable", response.Suppliers[1].Groups[0].Description)
+	assert.Equal(t, "0.089", response.Suppliers[1].Groups[0].SaleRatio)
+}
 
-	payload, err := common.Marshal(user)
-	require.NoError(t, err)
-	assert.NotContains(t, string(payload), "secret-upstream")
-	assert.NotContains(t, string(payload), `"channel_id"`)
+func TestPrepareManagedChannelPerformanceResponseKeepsGroupWithoutMetrics(t *testing.T) {
+	localChannelID := 99
+	bindings := []model.UpstreamGroupBinding{{
+		Id: 1, UpstreamChannelId: 1, UpstreamChannelName: "Supplier", RemoteGroupName: "New Group", LocalChannelId: &localChannelID,
+	}}
 
-	channelID, err := service.DecryptChannelAlias("gpt-0.1倍率", user.Channels[0].Alias)
-	require.NoError(t, err)
-	assert.Equal(t, 17, channelID)
+	response := prepareManagedChannelPerformanceResponse(perfmetrics.ChannelPerformanceResult{}, bindings)
+
+	require.Len(t, response.Suppliers, 1)
+	require.Len(t, response.Suppliers[0].Groups, 1)
+	group := response.Suppliers[0].Groups[0]
+	assert.Zero(t, group.AttemptCount)
+	assert.Zero(t, group.SuccessRate)
+	assert.Empty(t, group.Series)
 }

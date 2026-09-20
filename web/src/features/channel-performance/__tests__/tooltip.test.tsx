@@ -76,45 +76,79 @@ describe('channel performance tooltip', () => {
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false, staleTime: Infinity } },
     })
-    queryClient.setQueryData(['channel-performance', '1h', 'gpt-0.1倍率'], {
+    queryClient.setQueryData(['channel-performance', '1h'], {
       success: true,
       data: {
         updated_at: 1_754_890_123,
-        groups: ['gpt-0.1倍率', 'vip'],
-        selected_group: 'gpt-0.1倍率',
-        is_admin: true,
-        channels: [
+        range: '1h',
+        suppliers: [
           {
-            channel_id: 1,
-            channel_name: 'Primary',
-            display_name: 'Primary',
-            alias: 'ABC123',
-            channel_type: 1,
-            attempt_count: 4,
-            success_count: 3,
-            success_rate: 75,
-            avg_latency_ms: 1000,
-            avg_ttft_ms: 300,
-            avg_tps: 40,
-            cache_hit_rate: null,
-            cache_rate: null,
-            cache_report_count: 0,
-            cache_hit_count: 0,
-            cached_input_tokens: 0,
-            logical_input_tokens: 0,
-            active_model_count: 1,
-            series: [
+            upstream_channel_id: 1,
+            upstream_channel_name: 'Primary',
+            groups: [
               {
-                start_ts: 1_754_890_080,
-                end_ts: 1_754_890_200,
+                binding_id: 1,
+                group_name: 'Managed group',
+                description: 'Fast upstream',
+                sale_ratio: '0.089',
                 attempt_count: 4,
                 success_count: 3,
-                total_latency_ms: 4000,
                 success_rate: 75,
+                avg_latency_ms: 1000,
                 avg_ttft_ms: 300,
                 avg_tps: 40,
                 cache_hit_rate: null,
                 cache_rate: null,
+                series: [
+                  {
+                    start_ts: 1_754_890_080,
+                    end_ts: 1_754_890_200,
+                    attempt_count: 4,
+                    success_count: 3,
+                    total_latency_ms: 4000,
+                    success_rate: 75,
+                    avg_ttft_ms: 300,
+                    avg_tps: 40,
+                    cache_hit_rate: null,
+                    cache_rate: null,
+                  },
+                ],
+              },
+              {
+                binding_id: 2,
+                group_name: 'Managed group 2',
+                description: '',
+                sale_ratio: '0.118',
+                attempt_count: 0,
+                success_count: 0,
+                success_rate: 0,
+                avg_latency_ms: 0,
+                avg_ttft_ms: 0,
+                avg_tps: 0,
+                cache_hit_rate: null,
+                cache_rate: null,
+                series: [],
+              },
+            ],
+          },
+          {
+            upstream_channel_id: 2,
+            upstream_channel_name: 'Secondary',
+            groups: [
+              {
+                binding_id: 3,
+                group_name: 'Managed group 3',
+                description: 'Secondary upstream',
+                sale_ratio: '0.236',
+                attempt_count: 0,
+                success_count: 0,
+                success_rate: 0,
+                avg_latency_ms: 0,
+                avg_ttft_ms: 0,
+                avg_tps: 0,
+                cache_hit_rate: null,
+                cache_rate: null,
+                series: [],
               },
             ],
           },
@@ -137,18 +171,12 @@ describe('channel performance tooltip', () => {
       'button[aria-label*="75.00%"]'
     )
     assert.ok(bar)
-    const groupTrigger = container.querySelector<HTMLButtonElement>(
-      'button[aria-label="Group"]'
-    )
-    assert.ok(groupTrigger)
-    assert.equal(groupTrigger.textContent?.includes('gpt-0.1倍率'), true)
     assert.equal(container.textContent?.includes('Primary'), true)
-    assert.equal(container.textContent?.includes('#1 · ABC123'), true)
-    await act(async () => groupTrigger.click())
-    const vipOption = [
-      ...document.body.querySelectorAll('[role="option"]'),
-    ].find((option) => option.textContent?.includes('vip'))
-    assert.ok(vipOption)
+    assert.equal(container.textContent?.includes('Managed group'), true)
+    assert.equal(container.textContent?.includes('Managed group 2'), true)
+    assert.equal(container.textContent?.includes('Secondary'), true)
+    assert.equal(container.textContent?.includes('Managed group 3'), true)
+    assert.equal(container.querySelector('[aria-label="Group"]'), null)
     await act(async () => bar.focus())
 
     const tooltip = document.body.querySelector('[data-slot="tooltip-content"]')

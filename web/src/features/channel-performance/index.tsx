@@ -18,38 +18,29 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
-import { Activity, Gauge, RefreshCw, Timer } from 'lucide-react'
-import { useMemo, useState, type ReactNode } from 'react'
+import { RefreshCw } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { getChannelTypeLabel } from '@/features/channels/lib/channel-utils'
 import { getSuccessRateLevel } from '@/features/performance-metrics/lib/format'
 import { cn } from '@/lib/utils'
 
 import { getChannelPerformance } from './api'
 import type {
   ChannelPerformanceBucket,
-  ChannelPerformanceItem,
   ChannelPerformanceRange,
+  ManagedGroupPerformance,
 } from './types'
 
 const ranges: ChannelPerformanceRange[] = ['1h', '24h', '7d']
-const DEFAULT_GROUP = 'gpt-0.1倍率'
 
 function percent(value: number | null): string {
   return value == null || !Number.isFinite(value) ? '—' : `${value.toFixed(2)}%`
@@ -68,70 +59,78 @@ function throughput(value: number): string {
 export function ChannelPerformance() {
   const { t } = useTranslation()
   const [range, setRange] = useState<ChannelPerformanceRange>('1h')
-  const [group, setGroup] = useState(DEFAULT_GROUP)
   const performanceQuery = useQuery({
-    queryKey: ['channel-performance', range, group],
-    queryFn: () => getChannelPerformance(range, group),
+    queryKey: ['channel-performance', range],
+    queryFn: () => getChannelPerformance(range),
     refetchInterval: range === '1h' ? 30_000 : 60_000,
     staleTime: 15_000,
   })
-  const channels = useMemo(
-    () => performanceQuery.data?.data.channels ?? [],
-    [performanceQuery.data]
-  )
-  const summary = useMemo(() => {
-    let attempts = 0
-    let successes = 0
-    let cacheReports = 0
-    let cacheHits = 0
-    let cachedInput = 0
-    let logicalInput = 0
-    for (const channel of channels) {
-      attempts += channel.attempt_count
-      successes += channel.success_count
-      cacheReports += channel.cache_report_count
-      cacheHits += channel.cache_hit_count
-      cachedInput += channel.cached_input_tokens
-      logicalInput += channel.logical_input_tokens
-    }
-    return {
-      attempts,
-      successRate: attempts > 0 ? (successes / attempts) * 100 : null,
-      cacheHitRate: cacheReports > 0 ? (cacheHits / cacheReports) * 100 : null,
-      cacheRate: logicalInput > 0 ? (cachedInput / logicalInput) * 100 : null,
-    }
-  }, [channels])
+  const suppliers = performanceQuery.data?.data.suppliers ?? []
 
-  let channelContent: ReactNode
+  let content: ReactNode
   if (performanceQuery.isError) {
-    channelContent = (
+    content = (
       <div className='text-destructive border py-12 text-center text-sm'>
         {t('Failed to load channel performance')}
       </div>
     )
   } else if (performanceQuery.isLoading) {
-    channelContent = (
-      <div className='grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3'>
-        {[0, 1, 2].map((key) => (
+    content = (
+      <div className='space-y-4'>
+        {[0, 1].map((key) => (
           <Skeleton key={key} className='h-72 rounded-lg' />
         ))}
       </div>
     )
-  } else if (channels.length === 0) {
-    channelContent = (
+  } else if (suppliers.length === 0) {
+    content = (
       <div className='text-muted-foreground border py-12 text-center text-sm'>
-        {t('No enabled channels')}
+        {t('No enabled managed groups')}
       </div>
     )
   } else {
-    channelContent = (
-      <div className='grid grid-cols-1 gap-3 xl:grid-cols-2 2xl:grid-cols-3'>
-        {channels.map((channel) => (
-          <ChannelCard
-            key={channel.channel_id ?? channel.alias}
-            channel={channel}
-            isAdmin={performanceQuery.data?.data.is_admin ?? false}
-          />
+    content = (
+      <div className='space-y-6'>
+        {suppliers.map((supplier) => (
+          <section key={supplier.upstream_channel_id}>
+            <div className='mb-2 flex items-baseline gap-2'>
+              <h2 className='text-base font-semibold'>
+                {supplier.upstream_channel_name}
+              </h2>
+              <span className='text-muted-foreground text-xs'>
+                {t('{{count}} groups', { count: supplier.groups.length })}
+              </span>
+            </div>
+            <div className='overflow-x-auto border'>
+              <table className='w-full min-w-[1080px] text-sm'>
+                <thead className='bg-muted/40 text-muted-foreground'>
+                  <tr className='border-b text-left'>
+                    <th className='px-3 py-2 font-medium'>{t('Group')}</th>
+                    <th className='px-3 py-2 font-medium'>{t('Price')}</th>
+                    <th className='px-3 py-2 font-medium'>{t('Requests')}</th>
+                    <th className='px-3 py-2 font-medium'>
+                      {t('Success rate')}
+                    </th>
+                    <th className='px-3 py-2 font-medium'>{t('Latency')}</th>
+                    <th className='px-3 py-2 font-medium'>
+                      {t('Average TTFT')}
+                    </th>
+                    <th className='px-3 py-2 font-medium'>TPS</th>
+                    <th className='px-3 py-2 font-medium'>
+                      {t('Cache hit rate')}
+                    </th>
+                    <th className='px-3 py-2 font-medium'>{t('Cache rate')}</th>
+                    <th className='w-48 px-3 py-2 font-medium'>{t('Trend')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {supplier.groups.map((group) => (
+                    <GroupPerformanceRow key={group.binding_id} group={group} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
         ))}
       </div>
     )
@@ -143,18 +142,6 @@ export function ChannelPerformance() {
         {t('Channel Performance')}
       </SectionPageLayout.Title>
       <SectionPageLayout.Actions>
-        <Select value={group} onValueChange={(value) => setGroup(value ?? '')}>
-          <SelectTrigger className='w-40' aria-label={t('Group')}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {(performanceQuery.data?.data.groups ?? [group]).map((value) => (
-              <SelectItem key={value} value={value}>
-                {value}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
         <div className='flex items-center rounded-lg border p-0.5' role='group'>
           {ranges.map((value) => (
             <Button
@@ -202,144 +189,52 @@ export function ChannelPerformance() {
               </span>
             ) : null}
           </div>
-
-          <div className='grid border-y sm:grid-cols-2 lg:grid-cols-4 lg:divide-x'>
-            <SummaryMetric
-              label={t('Requests')}
-              value={summary.attempts.toLocaleString()}
-            />
-            <SummaryMetric
-              label={t('Success rate')}
-              value={percent(summary.successRate)}
-            />
-            <SummaryMetric
-              label={t('Cache hit rate')}
-              value={percent(summary.cacheHitRate)}
-            />
-            <SummaryMetric
-              label={t('Cache rate')}
-              value={percent(summary.cacheRate)}
-            />
-          </div>
-
-          {channelContent}
+          {content}
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
   )
 }
 
-function SummaryMetric(props: { label: string; value: string }) {
-  return (
-    <div className='px-4 py-3'>
-      <div className='text-muted-foreground text-xs'>{props.label}</div>
-      <div className='mt-1 font-mono text-xl font-semibold tabular-nums'>
-        {props.value}
-      </div>
-    </div>
-  )
-}
-
-function ChannelCard(props: {
-  channel: ChannelPerformanceItem
-  isAdmin: boolean
-}) {
+function GroupPerformanceRow(props: { group: ManagedGroupPerformance }) {
   const { t } = useTranslation()
-  const channel = props.channel
+  const group = props.group
   return (
-    <article className='overflow-hidden rounded-lg border'>
-      <header className='flex items-start justify-between gap-3 border-b px-4 py-3'>
-        <div className='min-w-0'>
-          <h3 className='truncate text-sm font-semibold'>
-            {channel.display_name}
-          </h3>
-          <p className='text-muted-foreground mt-0.5 text-xs'>
-            {props.isAdmin && channel.channel_id
-              ? `#${channel.channel_id} · ${channel.alias} · `
-              : ''}
-            {t(getChannelTypeLabel(channel.channel_type))}
-          </p>
-        </div>
-        <span className='text-muted-foreground shrink-0 text-xs'>
-          {t('{{count}} active models', { count: channel.active_model_count })}
-        </span>
-      </header>
-
-      <div className='grid grid-cols-3 divide-x border-b'>
-        <CardMetric
-          icon={Timer}
-          label={t('Latency')}
-          value={duration(channel.avg_latency_ms)}
-        />
-        <CardMetric
-          icon={Activity}
-          label={t('Average TTFT')}
-          value={duration(channel.avg_ttft_ms)}
-        />
-        <CardMetric
-          icon={Gauge}
-          label='TPS'
-          value={throughput(channel.avg_tps)}
-        />
-      </div>
-
-      <div className='bg-muted/20 grid grid-cols-3 border-b px-4 py-3'>
-        <CardValue
-          label={t('Success rate')}
-          value={
-            channel.attempt_count > 0 ? percent(channel.success_rate) : '—'
-          }
-        />
-        <CardValue
-          label={t('Cache hit rate')}
-          value={percent(channel.cache_hit_rate)}
-        />
-        <CardValue
-          label={t('Cache rate')}
-          value={percent(channel.cache_rate)}
-        />
-      </div>
-
-      <div className='px-4 pt-4 pb-3'>
-        <PerformanceBars series={channel.series} />
-        <div className='text-muted-foreground mt-2 flex justify-between text-[11px]'>
-          <span>{t('Past')}</span>
-          <span>{t('Now')}</span>
-        </div>
-      </div>
-    </article>
+    <tr className='border-b last:border-b-0'>
+      <td className='max-w-72 px-3 py-3 align-top'>
+        <div className='font-medium'>{group.group_name}</div>
+        {group.description ? (
+          <div className='text-muted-foreground mt-1 line-clamp-2 text-xs'>
+            {group.description}
+          </div>
+        ) : null}
+      </td>
+      <MetricCell value={group.sale_ratio || '—'} />
+      <MetricCell value={group.attempt_count.toLocaleString()} />
+      <MetricCell
+        value={group.attempt_count ? percent(group.success_rate) : '—'}
+      />
+      <MetricCell value={duration(group.avg_latency_ms)} />
+      <MetricCell value={duration(group.avg_ttft_ms)} />
+      <MetricCell value={throughput(group.avg_tps)} />
+      <MetricCell value={percent(group.cache_hit_rate)} />
+      <MetricCell value={percent(group.cache_rate)} />
+      <td className='px-3 py-3'>
+        {group.series.length > 0 ? (
+          <PerformanceBars series={group.series} />
+        ) : (
+          <span className='text-muted-foreground text-xs'>{t('No data')}</span>
+        )}
+      </td>
+    </tr>
   )
 }
 
-function CardMetric(props: {
-  icon: React.ComponentType<{ className?: string }>
-  label: string
-  value: string
-}) {
-  const Icon = props.icon
+function MetricCell(props: { value: string }) {
   return (
-    <div className='min-w-0 px-3 py-3'>
-      <div className='text-muted-foreground flex items-center gap-1 text-[11px]'>
-        <Icon className='size-3' />
-        <span className='truncate'>{props.label}</span>
-      </div>
-      <div className='mt-1 truncate font-mono text-sm font-semibold tabular-nums'>
-        {props.value}
-      </div>
-    </div>
-  )
-}
-
-function CardValue(props: { label: string; value: string }) {
-  return (
-    <div className='min-w-0'>
-      <div className='text-muted-foreground truncate text-[11px]'>
-        {props.label}
-      </div>
-      <div className='mt-1 truncate font-mono text-sm font-semibold tabular-nums'>
-        {props.value}
-      </div>
-    </div>
+    <td className='px-3 py-3 align-top font-mono whitespace-nowrap tabular-nums'>
+      {props.value}
+    </td>
   )
 }
 
@@ -347,7 +242,7 @@ function PerformanceBars(props: { series: ChannelPerformanceBucket[] }) {
   const { t } = useTranslation()
   return (
     <div
-      className='flex h-12 items-end gap-1'
+      className='flex h-9 items-end gap-0.5'
       aria-label={t('Success rate trend')}
     >
       {props.series.map((bucket) => {
@@ -373,32 +268,35 @@ function PerformanceBars(props: { series: ChannelPerformanceBucket[] }) {
                     colorClass
                   )}
                   style={{ height: `${height}%` }}
-                  aria-label={`${dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')} ${hasData ? percent(bucket.success_rate) : t('No data')}`}
+                  aria-label={`${dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')} · ${percent(bucket.success_rate)}`}
                 />
               }
             />
-            <TooltipContent className='min-w-52'>
-              <p>
-                <span className='font-medium whitespace-nowrap'>
-                  {dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')} –{' '}
-                  {dayjs.unix(bucket.end_ts).format('HH:mm')}
-                </span>
-                <br />
-                {t('Success rate')}:{' '}
-                {hasData ? percent(bucket.success_rate) : '—'}
-                <br />
-                {t('Requests')}: {bucket.attempt_count.toLocaleString()}
-                <br />
+            <TooltipContent>
+              <span>{dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')}</span>
+              <br />
+              <span>
+                {t('Requests')}: {bucket.attempt_count}
+              </span>
+              <br />
+              <span>
+                {t('Success rate')}: {percent(bucket.success_rate)}
+              </span>
+              <br />
+              <span>
                 {t('Average latency')}:{' '}
-                {hasData
-                  ? duration(bucket.total_latency_ms / bucket.attempt_count)
-                  : '—'}
-                <br />
-                {t('Average TTFT')}:{' '}
-                {hasData ? duration(bucket.avg_ttft_ms) : '—'}
-                <br />
-                TPS: {hasData ? throughput(bucket.avg_tps) : '—'}
-              </p>
+                {duration(
+                  bucket.total_latency_ms && bucket.attempt_count
+                    ? bucket.total_latency_ms / bucket.attempt_count
+                    : 0
+                )}
+              </span>
+              <br />
+              <span>
+                {t('Average TTFT')}: {duration(bucket.avg_ttft_ms)}
+              </span>
+              <br />
+              <span>TPS: {throughput(bucket.avg_tps)}</span>
             </TooltipContent>
           </Tooltip>
         )

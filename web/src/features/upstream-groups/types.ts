@@ -22,6 +22,7 @@ export type UpstreamGroup = {
   upstream_channel_name: string
   upstream_channel_type: string
   remote_group_name: string
+  remote_description: string
   local_group: string
   local_display_name: string
   local_channel_id?: number | null
