@@ -264,7 +264,6 @@ export function ApiKeysMutateDrawer({
     }
     if (isUpdate && (!apiKeyFetched || apiKeyFetching)) return
     if (!isUpdate && statusLoading) return
-
     const target = isUpdate && currentRow ? `update:${currentRow.id}` : 'create'
     if (initializedTarget === target) return
     if (isUpdate && currentRow) {

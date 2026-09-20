@@ -135,7 +135,7 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   model_limits: [],
   allow_ips: '',
   group: DEFAULT_GROUP,
-  routing_mode: 'single',
+  routing_mode: 'managed',
   groups: [],
   auto_groups_mode: 'inherit',
   auto_groups: [],
@@ -149,11 +149,11 @@ export function getApiKeyFormDefaultValues(
   return {
     ...API_KEY_FORM_DEFAULT_VALUES,
     group: defaultUseAutoGroup ? 'auto' : DEFAULT_GROUP,
-    routing_mode: 'single',
+    routing_mode: 'managed',
     groups: [],
     auto_groups_mode: 'inherit',
     auto_groups: [],
-    cross_group_retry: defaultUseAutoGroup,
+    cross_group_retry: true,
   }
 }
 

@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
   Tooltip,
   TooltipContent,
@@ -59,6 +60,9 @@ function throughput(value: number): string {
 export function ChannelPerformance() {
   const { t } = useTranslation()
   const [range, setRange] = useState<ChannelPerformanceRange>('1h')
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(
+    null
+  )
   const performanceQuery = useQuery({
     queryKey: ['channel-performance', range],
     queryFn: () => getChannelPerformance(range),
@@ -66,6 +70,10 @@ export function ChannelPerformance() {
     staleTime: 15_000,
   })
   const suppliers = performanceQuery.data?.data.suppliers ?? []
+  const selectedSupplier =
+    suppliers.find(
+      (supplier) => supplier.upstream_channel_id === selectedSupplierId
+    ) ?? suppliers[0]
 
   let content: ReactNode
   if (performanceQuery.isError) {
@@ -82,7 +90,7 @@ export function ChannelPerformance() {
         ))}
       </div>
     )
-  } else if (suppliers.length === 0) {
+  } else if (!selectedSupplier) {
     content = (
       <div className='text-muted-foreground border py-12 text-center text-sm'>
         {t('No enabled managed groups')}
@@ -91,47 +99,41 @@ export function ChannelPerformance() {
   } else {
     content = (
       <div className='space-y-6'>
-        {suppliers.map((supplier) => (
-          <section key={supplier.upstream_channel_id}>
-            <div className='mb-2 flex items-baseline gap-2'>
-              <h2 className='text-base font-semibold'>
-                {supplier.upstream_channel_name}
-              </h2>
-              <span className='text-muted-foreground text-xs'>
-                {t('{{count}} groups', { count: supplier.groups.length })}
-              </span>
-            </div>
-            <div className='overflow-x-auto border'>
-              <table className='w-full min-w-[1080px] text-sm'>
-                <thead className='bg-muted/40 text-muted-foreground'>
-                  <tr className='border-b text-left'>
-                    <th className='px-3 py-2 font-medium'>{t('Group')}</th>
-                    <th className='px-3 py-2 font-medium'>{t('Price')}</th>
-                    <th className='px-3 py-2 font-medium'>{t('Requests')}</th>
-                    <th className='px-3 py-2 font-medium'>
-                      {t('Success rate')}
-                    </th>
-                    <th className='px-3 py-2 font-medium'>{t('Latency')}</th>
-                    <th className='px-3 py-2 font-medium'>
-                      {t('Average TTFT')}
-                    </th>
-                    <th className='px-3 py-2 font-medium'>TPS</th>
-                    <th className='px-3 py-2 font-medium'>
-                      {t('Cache hit rate')}
-                    </th>
-                    <th className='px-3 py-2 font-medium'>{t('Cache rate')}</th>
-                    <th className='w-48 px-3 py-2 font-medium'>{t('Trend')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {supplier.groups.map((group) => (
-                    <GroupPerformanceRow key={group.binding_id} group={group} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </section>
-        ))}
+        <section key={selectedSupplier.upstream_channel_id}>
+          <div className='mb-2 flex items-baseline gap-2'>
+            <h2 className='text-base font-semibold'>
+              {selectedSupplier.upstream_channel_name}
+            </h2>
+            <span className='text-muted-foreground text-xs'>
+              {t('{{count}} groups', { count: selectedSupplier.groups.length })}
+            </span>
+          </div>
+          <div className='overflow-x-auto border'>
+            <table className='w-full min-w-[1080px] text-sm'>
+              <thead className='bg-muted/40 text-muted-foreground'>
+                <tr className='border-b text-left'>
+                  <th className='px-3 py-2 font-medium'>{t('Group')}</th>
+                  <th className='px-3 py-2 font-medium'>{t('Price')}</th>
+                  <th className='px-3 py-2 font-medium'>{t('Requests')}</th>
+                  <th className='px-3 py-2 font-medium'>{t('Success rate')}</th>
+                  <th className='px-3 py-2 font-medium'>{t('Latency')}</th>
+                  <th className='px-3 py-2 font-medium'>{t('Average TTFT')}</th>
+                  <th className='px-3 py-2 font-medium'>TPS</th>
+                  <th className='px-3 py-2 font-medium'>
+                    {t('Cache hit rate')}
+                  </th>
+                  <th className='px-3 py-2 font-medium'>{t('Cache rate')}</th>
+                  <th className='w-48 px-3 py-2 font-medium'>{t('Trend')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {selectedSupplier.groups.map((group) => (
+                  <GroupPerformanceRow key={group.binding_id} group={group} />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </div>
     )
   }
@@ -189,6 +191,26 @@ export function ChannelPerformance() {
               </span>
             ) : null}
           </div>
+          {suppliers.length > 0 ? (
+            <Tabs
+              value={String(selectedSupplier?.upstream_channel_id ?? '')}
+              onValueChange={(value) =>
+                value !== null && setSelectedSupplierId(Number(value))
+              }
+              className='overflow-x-auto'
+            >
+              <TabsList>
+                {suppliers.map((supplier) => (
+                  <TabsTrigger
+                    key={supplier.upstream_channel_id}
+                    value={String(supplier.upstream_channel_id)}
+                  >
+                    {supplier.upstream_channel_name}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          ) : null}
           {content}
         </div>
       </SectionPageLayout.Content>

@@ -334,6 +334,7 @@ describe('API keys mutate drawer Auto group integration', () => {
     const createdPayloads: Array<Record<string, unknown>> = []
     installApiFixtures(createdPayloads)
     await renderCreateDrawer()
+    await act(async () => findButton('Single group', true).click())
 
     const groupTrigger = getControlByLabel<HTMLButtonElement>('Group')
     assert.equal(groupTrigger.textContent?.includes('auto'), true)
@@ -374,6 +375,7 @@ describe('API keys mutate drawer Auto group integration', () => {
     const createdPayloads: Array<Record<string, unknown>> = []
     installApiFixtures(createdPayloads)
     await renderCreateDrawer()
+    await act(async () => findButton('Single group', true).click())
 
     const autoOrderControl = getControlByLabel<HTMLElement>('Auto group order')
     const addGroupTrigger = autoOrderControl.querySelector<HTMLButtonElement>(
@@ -420,8 +422,6 @@ describe('API keys mutate drawer Auto group integration', () => {
     installApiFixtures(createdPayloads)
     await renderCreateDrawer()
 
-    const managedMode = findButton('Managed groups', true)
-    await act(async () => managedMode.click())
     const selector = document.querySelector<HTMLInputElement>(
       'input[aria-label="Select managed groups"]'
     )

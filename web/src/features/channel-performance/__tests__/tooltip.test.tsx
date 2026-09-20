@@ -175,7 +175,7 @@ describe('channel performance tooltip', () => {
     assert.equal(container.textContent?.includes('Managed group'), true)
     assert.equal(container.textContent?.includes('Managed group 2'), true)
     assert.equal(container.textContent?.includes('Secondary'), true)
-    assert.equal(container.textContent?.includes('Managed group 3'), true)
+    assert.equal(container.textContent?.includes('Managed group 3'), false)
     assert.equal(container.querySelector('[aria-label="Group"]'), null)
     await act(async () => bar.focus())
 
@@ -186,6 +186,16 @@ describe('channel performance tooltip', () => {
     assert.match(tooltip.textContent ?? '', /Average latency: 1.00s/)
     assert.match(tooltip.textContent ?? '', /Average TTFT: 300ms/)
     assert.match(tooltip.textContent ?? '', /TPS: 40.0 t\/s/)
+
+    const secondaryTab = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        'button[data-slot="tabs-trigger"]'
+      ),
+    ].find((button) => button.textContent?.includes('Secondary'))
+    assert.ok(secondaryTab)
+    await act(async () => secondaryTab.click())
+    assert.equal(container.textContent?.includes('Managed group 3'), true)
+    assert.equal(container.textContent?.includes('Managed group 2'), false)
 
     await act(async () => root.unmount())
     queryClient.clear()

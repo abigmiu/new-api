@@ -105,7 +105,7 @@ describe('upstream groups layout', () => {
     container.remove()
   })
 
-  test('renders the synchronized upstream group description', async () => {
+  test('switches supplier tabs and renders only that supplier groups', async () => {
     const container = document.createElement('div')
     document.body.append(container)
     const root = createRoot(container)
@@ -134,6 +134,25 @@ describe('upstream groups layout', () => {
           disabled_reason: '',
           last_synced_at: 1,
         },
+        {
+          id: 2,
+          upstream_channel_id: 3,
+          upstream_channel_name: 'Supplier 2',
+          upstream_channel_type: 'new-api',
+          remote_group_name: 'standard',
+          remote_description: 'Standard models',
+          local_group: 'uo-3-4',
+          local_display_name: '渠道3-standard',
+          upstream_key_ready: true,
+          desired_enabled: true,
+          state: 'active',
+          source_ratio: '0.1',
+          sale_ratio: '0.118',
+          price_version: 1,
+          affected_key_count: 0,
+          disabled_reason: '',
+          last_synced_at: 1,
+        },
       ],
     })
 
@@ -150,6 +169,17 @@ describe('upstream groups layout', () => {
     })
 
     assert.equal(container.textContent?.includes('Premium models'), true)
+    assert.equal(container.textContent?.includes('Standard models'), false)
+
+    const secondSupplierTab = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        'button[data-slot="tabs-trigger"]'
+      ),
+    ].find((button) => button.textContent?.includes('Supplier 2'))
+    assert.ok(secondSupplierTab)
+    await act(async () => secondSupplierTab.click())
+    assert.equal(container.textContent?.includes('Premium models'), false)
+    assert.equal(container.textContent?.includes('Standard models'), true)
 
     await act(async () => root.unmount())
     queryClient.clear()

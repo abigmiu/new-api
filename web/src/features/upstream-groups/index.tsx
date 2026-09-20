@@ -30,6 +30,7 @@ import {
 import { SectionPageLayout } from '@/components/layout'
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatTimestampToDate } from '@/lib/format'
 
 import {
@@ -69,6 +70,9 @@ export function UpstreamGroups() {
     group: UpstreamGroup
     enabled: boolean
   } | null>(null)
+  const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(
+    null
+  )
   const groupsQuery = useQuery({
     queryKey: ['upstream-groups'],
     queryFn: getUpstreamGroups,
@@ -101,12 +105,6 @@ export function UpstreamGroups() {
 
   const columns = useMemo<StaticDataTableColumn<UpstreamGroup>[]>(
     () => [
-      {
-        id: 'supplier',
-        header: t('Supplier'),
-        className: 'min-w-40',
-        cell: (group) => group.upstream_channel_name,
-      },
       {
         id: 'group',
         header: t('Group'),
@@ -196,7 +194,22 @@ export function UpstreamGroups() {
     [stateMutation, t]
   )
 
-  const groups = groupsQuery.data?.data || []
+  const groups = useMemo(() => groupsQuery.data?.data || [], [groupsQuery.data])
+  const suppliers = useMemo(() => {
+    const byId = new Map<number, string>()
+    for (const group of groups) {
+      byId.set(group.upstream_channel_id, group.upstream_channel_name)
+    }
+    return [...byId.entries()].map(([id, name]) => ({ id, name }))
+  }, [groups])
+  const selectedSupplier =
+    suppliers.find((supplier) => supplier.id === selectedSupplierId) ??
+    suppliers[0]
+  const visibleGroups = selectedSupplier
+    ? groups.filter(
+        (group) => group.upstream_channel_id === selectedSupplier.id
+      )
+    : []
 
   return (
     <>
@@ -217,17 +230,38 @@ export function UpstreamGroups() {
           </Button>
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <StaticDataTable
-            className='h-full min-h-0 overflow-auto **:data-[slot=table-container]:overflow-visible'
-            columns={columns}
-            containerProps={{ id: 'upstream-groups-scroll-area' }}
-            data={groups}
-            getRowKey={(group) => group.id}
-            emptyContent={
-              groupsQuery.isLoading ? t('Loading...') : t('No upstream groups')
-            }
-            tableClassName='min-w-[1100px]'
-          />
+          <div className='flex h-full min-h-0 flex-col gap-3'>
+            {selectedSupplier ? (
+              <Tabs
+                value={String(selectedSupplier.id)}
+                onValueChange={(value) =>
+                  value !== null && setSelectedSupplierId(Number(value))
+                }
+                className='shrink-0 overflow-x-auto'
+              >
+                <TabsList>
+                  {suppliers.map((supplier) => (
+                    <TabsTrigger key={supplier.id} value={String(supplier.id)}>
+                      {supplier.name}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+            ) : null}
+            <StaticDataTable
+              className='h-full min-h-0 overflow-auto **:data-[slot=table-container]:overflow-visible'
+              columns={columns}
+              containerProps={{ id: 'upstream-groups-scroll-area' }}
+              data={visibleGroups}
+              getRowKey={(group) => group.id}
+              emptyContent={
+                groupsQuery.isLoading
+                  ? t('Loading...')
+                  : t('No upstream groups')
+              }
+              tableClassName='min-w-[960px]'
+            />
+          </div>
         </SectionPageLayout.Content>
       </SectionPageLayout>
       <ConfirmDialog
