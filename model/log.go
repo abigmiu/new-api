@@ -123,8 +123,16 @@ func formatUserLogs(logs []*Log, startIdx int) {
 			delete(otherMap, "admin_info")
 			// Remove operation-audit details (operator/route info), admin-only.
 			delete(otherMap, "audit_info")
-			// delete(otherMap, "reject_reason")
-			// delete(otherMap, "stream_status")
+			// Remove upstream routing/reject details, admin-only. reject_reason
+			// carries upstream block/refusal diagnostics (Gemini block_reason,
+			// Claude stop_reason) and the channel identity behind the failure;
+			// the admin UI is the only intended consumer.
+			delete(otherMap, "reject_reason")
+			delete(otherMap, "channel_id")
+			delete(otherMap, "channel_name")
+			delete(otherMap, "channel_type")
+			// stream_status is deliberately kept: it explains stream interruptions
+			// to the log owner.
 		}
 		logs[i].Other = common.MapToJsonStr(otherMap)
 	}
