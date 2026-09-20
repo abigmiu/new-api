@@ -22,6 +22,26 @@ func RegisterScheduledSystemTasks() {
 	service.RegisterSystemTaskHandler(modelUpdateHandler{})
 	service.RegisterSystemTaskHandler(midjourneyPollHandler{})
 	service.RegisterSystemTaskHandler(asyncTaskPollHandler{})
+	service.RegisterSystemTaskHandler(upstreamGroupSyncHandler{})
+}
+
+type upstreamGroupSyncHandler struct{}
+
+func (upstreamGroupSyncHandler) Type() string { return model.SystemTaskTypeUpstreamGroupSync }
+
+func (upstreamGroupSyncHandler) Enabled() bool { return service.UpstreamGroupSyncConfigured() }
+
+func (upstreamGroupSyncHandler) Interval() time.Duration { return time.Minute }
+
+func (upstreamGroupSyncHandler) NewPayload() any { return nil }
+
+func (upstreamGroupSyncHandler) Run(ctx context.Context, task *model.SystemTask, runnerID string) {
+	summary, err := service.RunUpstreamGroupSync(ctx)
+	if err != nil {
+		finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusFailed, summary, err)
+		return
+	}
+	finishSystemTaskHandler(task, runnerID, model.SystemTaskStatusSucceeded, summary, nil)
 }
 
 // channelTestHandler runs the scheduled "test all channels" job. Enablement and

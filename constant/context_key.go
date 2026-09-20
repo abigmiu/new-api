@@ -21,6 +21,12 @@ const (
 	ContextKeyTokenModelLimit        ContextKey = "token_model_limit"
 	ContextKeyTokenCrossGroupRetry   ContextKey = "token_cross_group_retry"
 	ContextKeyTokenAutoGroups        ContextKey = "token_auto_groups"
+	ContextKeyTokenGroups            ContextKey = "token_groups"
+	ContextKeyTokenGroupSaleRatio    ContextKey = "token_group_sale_ratio"
+	ContextKeyTokenGroupSourceRatio  ContextKey = "token_group_source_ratio"
+	ContextKeyTokenGroupPriceVersion ContextKey = "token_group_price_version"
+	ContextKeyTokenGroupBindingId    ContextKey = "token_group_binding_id"
+	ContextKeyTokenGroupIndex        ContextKey = "token_group_index"
 
 	/* channel related keys */
 	ContextKeyChannelId                ContextKey = "channel_id"

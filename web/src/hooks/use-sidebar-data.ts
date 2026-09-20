@@ -30,6 +30,7 @@ import {
   Gauge,
   Route,
   ServerCog,
+  Layers3,
   Settings,
   Ticket,
   User,
@@ -135,6 +136,12 @@ export function useSidebarData(): SidebarData {
             title: t('Channels'),
             url: '/channels',
             icon: Radio,
+          },
+          {
+            title: t('Upstream groups'),
+            url: '/upstream-groups',
+            icon: Layers3,
+            requiredRole: ROLE.SUPER_ADMIN,
           },
           {
             title: t('Models'),

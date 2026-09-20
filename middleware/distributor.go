@@ -84,8 +84,9 @@ func Distribute() func(c *gin.Context) {
 				}
 				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+				_, managedTokenGroups := service.GetRequestTokenGroups(c)
 				// check path is /pg/chat/completions
-				if strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
+				if !managedTokenGroups && strings.HasPrefix(c.Request.URL.Path, "/pg/chat/completions") {
 					playgroundRequest := &dto.PlayGroundRequest{}
 					err = common.UnmarshalBodyReusable(c, playgroundRequest)
 					if err != nil {
@@ -102,13 +103,15 @@ func Distribute() func(c *gin.Context) {
 					}
 				}
 
-				if preferred, found := getUserPreferredChannel(c, modelRequest.Model, usingGroup); found {
-					channel = preferred
-					selectGroup = usingGroup
-					common.SetContextKey(c, constant.ContextKeyUserPreferredChannel, true)
+				if !managedTokenGroups {
+					if preferred, found := getUserPreferredChannel(c, modelRequest.Model, usingGroup); found {
+						channel = preferred
+						selectGroup = usingGroup
+						common.SetContextKey(c, constant.ContextKeyUserPreferredChannel, true)
+					}
 				}
 
-				if channel == nil {
+				if channel == nil && !managedTokenGroups {
 					if preferredChannelID, found := service.GetPreferredChannelByAffinity(c, modelRequest.Model, usingGroup); found {
 						affinityUsable := false
 						preferred, err := model.CacheGetChannel(preferredChannelID)
@@ -150,6 +153,9 @@ func Distribute() func(c *gin.Context) {
 					})
 					if err != nil {
 						showGroup := usingGroup
+						if managedTokenGroups {
+							showGroup = selectGroup
+						}
 						if usingGroup == "auto" {
 							showGroup = fmt.Sprintf("auto(%s)", selectGroup)
 						}
@@ -159,11 +165,19 @@ func Distribute() func(c *gin.Context) {
 						//	common.SysError(fmt.Sprintf("渠道不存在：%d", channel.Id))
 						//	message = "数据库一致性已被破坏，请联系管理员"
 						//}
-						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, message, types.ErrorCodeModelNotFound)
+						errorCode := types.ErrorCodeModelNotFound
+						if managedTokenGroups {
+							errorCode = types.ErrorCodeTokenGroupUnavailable
+						}
+						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, message, errorCode)
 						return
 					}
 					if channel == nil {
-						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), types.ErrorCodeModelNotFound)
+						errorCode := types.ErrorCodeModelNotFound
+						if managedTokenGroups {
+							errorCode = types.ErrorCodeTokenGroupUnavailable
+						}
+						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), errorCode)
 						return
 					}
 				}

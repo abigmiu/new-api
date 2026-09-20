@@ -27,6 +27,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 
+import type { ApiKey } from '../types'
 import {
   // AutoGroupBadge,
   GroupRatioBadge,
@@ -38,10 +39,39 @@ type ApiKeyGroupCellProps = {
   group: string
   ratio?: GroupRatio
   shouldReduceMotion: boolean
+  groups?: ApiKey['groups']
 }
 
 export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
   const { t } = useTranslation()
+
+  if (props.groups && props.groups.length > 0) {
+    const activeCount = props.groups.filter(
+      (group) => group.effective_enabled
+    ).length
+    const changedCount = props.groups.filter(
+      (group) => group.state === 'price_changed'
+    ).length
+    return (
+      <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+        <StatusBadge
+          label={t('{{active}} / {{total}} active', {
+            active: activeCount,
+            total: props.groups.length,
+          })}
+          variant={activeCount > 0 ? 'success' : 'danger'}
+          copyable={false}
+        />
+        {changedCount > 0 && (
+          <StatusBadge
+            label={t('{{count}} price changed', { count: changedCount })}
+            variant='warning'
+            copyable={false}
+          />
+        )}
+      </div>
+    )
+  }
 
   if (props.group !== 'auto') {
     const ratio = typeof props.ratio === 'number' ? props.ratio : undefined

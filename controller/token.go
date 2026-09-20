@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -22,6 +23,20 @@ type tokenAutoGroupsInput struct {
 	Groups []string
 }
 
+type tokenGroupsInput struct {
+	Set      bool
+	GroupIds []int64
+}
+
+func (input *tokenGroupsInput) UnmarshalJSON(data []byte) error {
+	input.Set = true
+	if strings.TrimSpace(string(data)) == "null" {
+		input.GroupIds = nil
+		return nil
+	}
+	return common.Unmarshal(data, &input.GroupIds)
+}
+
 func (input *tokenAutoGroupsInput) UnmarshalJSON(data []byte) error {
 	input.Set = true
 	if strings.TrimSpace(string(data)) == "null" {
@@ -34,14 +49,16 @@ func (input *tokenAutoGroupsInput) UnmarshalJSON(data []byte) error {
 type tokenRequest struct {
 	model.Token
 	AutoGroups tokenAutoGroupsInput `json:"auto_groups"`
+	Groups     tokenGroupsInput     `json:"groups"`
 }
 
 type tokenResponse struct {
 	*model.Token
-	AutoGroups []string `json:"auto_groups"`
+	AutoGroups []string                      `json:"auto_groups"`
+	Groups     []model.TokenGroupBindingView `json:"groups"`
 }
 
-func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
+func buildMaskedTokenResponseWithGroups(token *model.Token, groups []model.TokenGroupBindingView) *tokenResponse {
 	if token == nil {
 		return nil
 	}
@@ -55,13 +72,33 @@ func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
 	if len(autoGroups) == 0 {
 		autoGroups = nil
 	}
-	return &tokenResponse{Token: &maskedToken, AutoGroups: autoGroups}
+	return &tokenResponse{Token: &maskedToken, AutoGroups: autoGroups, Groups: groups}
+}
+
+func buildMaskedTokenResponse(token *model.Token) *tokenResponse {
+	if token == nil {
+		return nil
+	}
+	groups, err := model.ListTokenGroupBindingViews(token.Id)
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to load groups for token %d: %v", token.Id, err))
+	}
+	return buildMaskedTokenResponseWithGroups(token, groups)
 }
 
 func buildMaskedTokenResponses(tokens []*model.Token) []*tokenResponse {
+	tokenIds := make([]int, 0, len(tokens))
+	for _, token := range tokens {
+		tokenIds = append(tokenIds, token.Id)
+	}
+	groupsByToken, err := model.ListTokenGroupBindingViewsBatch(tokenIds)
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to load token groups: %v", err))
+		groupsByToken = nil
+	}
 	maskedTokens := make([]*tokenResponse, 0, len(tokens))
 	for _, token := range tokens {
-		maskedTokens = append(maskedTokens, buildMaskedTokenResponse(token))
+		maskedTokens = append(maskedTokens, buildMaskedTokenResponseWithGroups(token, groupsByToken[token.Id]))
 	}
 	return maskedTokens
 }
@@ -172,6 +209,32 @@ func GetTokenAutoGroups(c *gin.Context) {
 		"groups":    service.GetUserAutoGroup(userGroup),
 		"max_count": setting.GetMaxTokenAutoGroups(),
 	})
+}
+
+func GetTokenGroups(c *gin.Context) {
+	groups, err := model.ListActiveUpstreamGroupBindings()
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	type groupOption struct {
+		BindingId    int64  `json:"binding_id"`
+		Value        string `json:"value"`
+		Label        string `json:"label"`
+		PriceVersion int64  `json:"price_version"`
+		SaleRatio    string `json:"sale_ratio"`
+	}
+	options := make([]groupOption, 0, len(groups))
+	for _, group := range groups {
+		options = append(options, groupOption{
+			BindingId:    group.Id,
+			Value:        group.LocalGroup,
+			Label:        group.LocalDisplayName,
+			PriceVersion: group.PriceVersion,
+			SaleRatio:    group.SaleRatio,
+		})
+	}
+	common.ApiSuccess(c, gin.H{"groups": options, "max_count": model.MaxTokenManagedGroups})
 }
 
 func GetTokenKey(c *gin.Context) {
@@ -299,7 +362,23 @@ func AddToken(c *gin.Context) {
 		})
 		return
 	}
-	if token.Group == "auto" {
+	if request.Groups.Set && len(request.Groups.GroupIds) == 0 && strings.TrimSpace(token.Group) == "" {
+		common.ApiError(c, errors.New("at least one token group is required"))
+		return
+	}
+	if !request.Groups.Set && strings.HasPrefix(strings.TrimSpace(token.Group), "uo-") {
+		common.ApiError(c, errors.New("managed groups must be assigned through token groups"))
+		return
+	}
+	if len(request.Groups.GroupIds) > model.MaxTokenManagedGroups {
+		common.ApiError(c, fmt.Errorf("token groups must not exceed %d", model.MaxTokenManagedGroups))
+		return
+	}
+	if request.Groups.Set && len(request.Groups.GroupIds) > 0 {
+		token.Group = ""
+		token.CrossGroupRetry = true
+		_ = token.SetAutoGroups(nil)
+	} else if token.Group == "auto" {
 		if !setTokenAutoGroups(c, &token, request.AutoGroups.Groups) {
 			return
 		}
@@ -329,7 +408,11 @@ func AddToken(c *gin.Context) {
 		CrossGroupRetry:    token.CrossGroupRetry,
 		AutoGroups:         token.AutoGroups,
 	}
-	err = cleanToken.Insert()
+	if request.Groups.Set {
+		err = model.CreateTokenWithGroupBindings(&cleanToken, request.Groups.GroupIds)
+	} else {
+		err = cleanToken.Insert()
+	}
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -397,6 +480,18 @@ func UpdateToken(c *gin.Context) {
 	if statusOnly != "" {
 		cleanToken.Status = token.Status
 	} else {
+		if request.Groups.Set && len(request.Groups.GroupIds) == 0 && strings.TrimSpace(token.Group) == "" {
+			common.ApiError(c, errors.New("at least one token group is required"))
+			return
+		}
+		if !request.Groups.Set && strings.HasPrefix(strings.TrimSpace(token.Group), "uo-") {
+			common.ApiError(c, errors.New("managed groups must be assigned through token groups"))
+			return
+		}
+		if len(request.Groups.GroupIds) > model.MaxTokenManagedGroups {
+			common.ApiError(c, fmt.Errorf("token groups must not exceed %d", model.MaxTokenManagedGroups))
+			return
+		}
 		// If you add more fields, please also update token.Update()
 		cleanToken.Name = token.Name
 		cleanToken.ExpiredTime = token.ExpiredTime
@@ -407,7 +502,11 @@ func UpdateToken(c *gin.Context) {
 		cleanToken.AllowIps = token.AllowIps
 		cleanToken.Group = token.Group
 		cleanToken.CrossGroupRetry = token.CrossGroupRetry
-		if token.Group != "auto" {
+		if request.Groups.Set && len(request.Groups.GroupIds) > 0 {
+			cleanToken.Group = ""
+			cleanToken.CrossGroupRetry = true
+			_ = cleanToken.SetAutoGroups(nil)
+		} else if token.Group != "auto" {
 			cleanToken.CrossGroupRetry = false
 			_ = cleanToken.SetAutoGroups(nil)
 		} else if request.AutoGroups.Set {
@@ -416,7 +515,7 @@ func UpdateToken(c *gin.Context) {
 			}
 		}
 	}
-	err = cleanToken.Update()
+	err = model.UpdateTokenWithGroupBindings(cleanToken, request.Groups.GroupIds, request.Groups.Set && statusOnly == "")
 	if err != nil {
 		common.ApiError(c, err)
 		return
@@ -426,6 +525,55 @@ func UpdateToken(c *gin.Context) {
 		"message": "",
 		"data":    buildMaskedTokenResponse(cleanToken),
 	})
+}
+
+type tokenGroupStateRequest struct {
+	PriceVersion int64 `json:"price_version"`
+}
+
+func AcceptTokenGroupPrice(c *gin.Context) {
+	tokenId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	bindingId, err := strconv.ParseInt(c.Param("binding_id"), 10, 64)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	request := tokenGroupStateRequest{}
+	if err := c.ShouldBindJSON(&request); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SetTokenGroupEnabled(tokenId, c.GetInt("id"), bindingId, true, request.PriceVersion); err != nil {
+		if errors.Is(err, model.ErrUpstreamGroupPriceChanged) {
+			c.JSON(http.StatusConflict, gin.H{"success": false, "message": err.Error()})
+			return
+		}
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
+}
+
+func DisableTokenGroup(c *gin.Context) {
+	tokenId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	bindingId, err := strconv.ParseInt(c.Param("binding_id"), 10, 64)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if err := model.SetTokenGroupEnabled(tokenId, c.GetInt("id"), bindingId, false, 0); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	common.ApiSuccess(c, nil)
 }
 
 type TokenBatch struct {

@@ -457,6 +457,23 @@ func TokenAuth() func(c *gin.Context) {
 
 		userGroup := userCache.Group
 		tokenGroup := token.Group
+		tokenGroups, groupErr := model.ListTokenGroupBindingViews(token.Id)
+		if groupErr != nil {
+			common.SysLog(fmt.Sprintf("TokenAuth ListTokenGroupBindingViews error for token %d: %v", token.Id, groupErr))
+			abortWithOpenAiMessage(c, http.StatusInternalServerError, common.TranslateMessage(c, i18n.MsgDatabaseError))
+			return
+		}
+		if len(tokenGroups) > 0 {
+			if len(parts) > 1 {
+				abortWithOpenAiMessage(c, http.StatusForbidden, "托管分组令牌不支持指定渠道", types.ErrorCodeAccessDenied)
+				return
+			}
+			common.SetContextKey(c, constant.ContextKeyTokenGroups, tokenGroups)
+			tokenGroup = ""
+		} else if strings.HasPrefix(tokenGroup, "uo-") {
+			abortWithOpenAiMessage(c, http.StatusForbidden, "托管分组必须通过令牌分组授权访问", types.ErrorCodeAccessDenied)
+			return
+		}
 		if tokenGroup != "" {
 			// check common.UserUsableGroups[userGroup]
 			if _, ok := service.GetUserUsableGroups(userGroup)[tokenGroup]; !ok {

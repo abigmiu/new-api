@@ -399,7 +399,16 @@ func DeleteTokenById(id int, userId int) (err error) {
 	if err != nil {
 		return err
 	}
-	return token.Delete()
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		if err := DeleteTokenGroupBindings(tx, []int{id}); err != nil {
+			return err
+		}
+		return tx.Delete(&token).Error
+	})
+	if shouldUpdateRedis(true, err) {
+		_ = cacheDeleteToken(token.Key)
+	}
+	return err
 }
 
 func IncreaseTokenQuota(tokenId int, key string, quota int) (err error) {
@@ -479,6 +488,14 @@ func BatchDeleteTokens(ids []int, userId int) (int, error) {
 
 	var tokens []Token
 	if err := tx.Where("user_id = ? AND id IN (?)", userId, ids).Find(&tokens).Error; err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+	tokenIds := make([]int, 0, len(tokens))
+	for _, token := range tokens {
+		tokenIds = append(tokenIds, token.Id)
+	}
+	if err := DeleteTokenGroupBindings(tx, tokenIds); err != nil {
 		tx.Rollback()
 		return 0, err
 	}

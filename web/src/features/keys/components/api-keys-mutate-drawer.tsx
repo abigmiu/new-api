@@ -18,7 +18,13 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, KeyRound, Settings2, WalletCards } from 'lucide-react'
+import {
+  ChevronDown,
+  KeyRound,
+  Layers3,
+  Settings2,
+  WalletCards,
+} from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm, type SubmitErrorHandler } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -62,6 +68,7 @@ import {
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { useStatus } from '@/hooks/use-status'
 import { getUserModels, getUserGroups } from '@/lib/api'
 import { getCurrencyDisplay, getCurrencyLabel } from '@/lib/currency'
@@ -72,6 +79,7 @@ import {
   updateApiKey,
   getApiKey,
   getTokenAutoGroups,
+  getTokenGroups,
 } from '../api'
 import { ERROR_MESSAGES, SUCCESS_MESSAGES } from '../constants'
 import {
@@ -89,6 +97,7 @@ import {
 import { useApiKeys } from './api-keys-provider'
 import { AutoGroupOrderEditor } from './auto-group-order-editor'
 import { ChannelPreferenceHint } from './channel-preference-hint'
+import { ManagedTokenGroups } from './managed-token-groups'
 
 type ApiKeyMutateDrawerProps = {
   open: boolean
@@ -134,9 +143,21 @@ export function ApiKeysMutateDrawer({
   })
 
   const {
+    data: managedGroupsData,
+    isFetched: managedGroupsFetched,
+    isFetching: managedGroupsFetching,
+  } = useQuery({
+    queryKey: ['token-groups'],
+    queryFn: getTokenGroups,
+    enabled: open,
+    staleTime: 0,
+  })
+
+  const {
     data: apiKeyData,
     isFetched: apiKeyFetched,
     isFetching: apiKeyFetching,
+    refetch: refetchApiKey,
   } = useQuery({
     queryKey: ['api-key', currentRowId],
     queryFn: () => getApiKey(currentRowId ?? 0),
@@ -189,9 +210,36 @@ export function ApiKeysMutateDrawer({
     Number(autoGroupsData?.data?.max_count) > 0
       ? Number(autoGroupsData?.data?.max_count)
       : 5
+  const managedGroupOptions = useMemo(() => {
+    const options = managedGroupsData?.data?.groups || []
+    const historical = apiKeyData?.data?.groups || []
+    const byId = new Map(
+      options.map((group) => [
+        group.binding_id,
+        {
+          value: String(group.binding_id),
+          label: `${group.label} (${group.sale_ratio})`,
+        },
+      ])
+    )
+    for (const group of historical) {
+      if (!byId.has(group.binding_id)) {
+        byId.set(group.binding_id, {
+          value: String(group.binding_id),
+          label: `${group.display_name} (${group.current_sale_ratio})`,
+        })
+      }
+    }
+    return [...byId.values()]
+  }, [managedGroupsData, apiKeyData])
+  const maxManagedGroups =
+    Number.isInteger(managedGroupsData?.data?.max_count) &&
+    Number(managedGroupsData?.data?.max_count) > 0
+      ? Number(managedGroupsData?.data?.max_count)
+      : 20
   const schema = useMemo(
-    () => getApiKeyFormSchema(t, maxAutoGroups),
-    [t, maxAutoGroups]
+    () => getApiKeyFormSchema(t, maxAutoGroups, maxManagedGroups),
+    [t, maxAutoGroups, maxManagedGroups]
   )
 
   const form = useForm<ApiKeyFormValues>({
@@ -209,7 +257,9 @@ export function ApiKeysMutateDrawer({
       !groupsFetched ||
       groupsFetching ||
       !autoGroupsFetched ||
-      autoGroupsFetching
+      autoGroupsFetching ||
+      !managedGroupsFetched ||
+      managedGroupsFetching
     ) {
       return
     }
@@ -247,6 +297,8 @@ export function ApiKeysMutateDrawer({
     groupsFetching,
     autoGroupsFetched,
     autoGroupsFetching,
+    managedGroupsFetched,
+    managedGroupsFetching,
     apiKeyData,
     apiKeyFetched,
     apiKeyFetching,
@@ -259,6 +311,7 @@ export function ApiKeysMutateDrawer({
     isUpdate && currentRow ? `update:${currentRow.id}` : 'create'
   const isFormInitialized = initializedTarget === formTarget
   const selectedGroup = form.watch('group')
+  const routingMode = form.watch('routing_mode')
 
   // Correct group after groups load: if the form value is not in available groups, fall back
   useEffect(() => {
@@ -412,41 +465,110 @@ export function ApiKeysMutateDrawer({
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
-                name='group'
+                name='routing_mode'
                 render={({ field }) => (
                   <FormItem>
-                    <div className='flex flex-col gap-2'>
-                      <FormLabel>{t('Group')}</FormLabel>
-                      <ChannelPreferenceHint />
-                    </div>
+                    <FormLabel>{t('Routing mode')}</FormLabel>
                     <FormControl>
-                      <ApiKeyGroupCombobox
-                        options={groups}
-                        value={field.value}
-                        onValueChange={(group) => {
-                          field.onChange(group)
-                          if (group === 'auto') {
-                            form.setValue('cross_group_retry', true, {
-                              shouldDirty: true,
-                            })
-                            return
+                      <ToggleGroup
+                        value={[field.value]}
+                        onValueChange={(values) => {
+                          const next = values.find(
+                            (value) => value !== field.value
+                          )
+                          if (next === 'single' || next === 'managed') {
+                            field.onChange(next)
                           }
-                          form.setValue('cross_group_retry', false, {
-                            shouldDirty: true,
-                          })
                         }}
-                        placeholder={t('Select a group')}
-                      />
+                        variant='outline'
+                        spacing={2}
+                        className='grid w-full grid-cols-2'
+                        aria-label={t('Routing mode')}
+                      >
+                        <ToggleGroupItem value='single' className='w-full'>
+                          {t('Single group')}
+                        </ToggleGroupItem>
+                        <ToggleGroupItem value='managed' className='w-full'>
+                          {t('Managed groups')}
+                        </ToggleGroupItem>
+                      </ToggleGroup>
                     </FormControl>
-                    <FormMessage />
                   </FormItem>
                 )}
               />
 
-              {selectedGroup === 'auto' && (
+              {routingMode === 'managed' && (
+                <FormField
+                  control={form.control}
+                  name='groups'
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t('Managed groups')}</FormLabel>
+                      <FormControl>
+                        <MultiSelect
+                          options={managedGroupOptions}
+                          selected={field.value.map(String)}
+                          onChange={(values) =>
+                            field.onChange(
+                              values
+                                .slice(0, maxManagedGroups)
+                                .map((value) => Number(value))
+                            )
+                          }
+                          placeholder={t('Select managed groups')}
+                          maxVisibleChips={4}
+                        />
+                      </FormControl>
+                      <FormDescription>
+                        {t('{{count}} / {{max}} groups selected', {
+                          count: field.value.length,
+                          max: maxManagedGroups,
+                        })}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {routingMode === 'single' && (
+                <FormField
+                  control={form.control}
+                  name='group'
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className='flex flex-col gap-2'>
+                        <FormLabel>{t('Group')}</FormLabel>
+                        <ChannelPreferenceHint />
+                      </div>
+                      <FormControl>
+                        <ApiKeyGroupCombobox
+                          options={groups}
+                          value={field.value}
+                          onValueChange={(group) => {
+                            field.onChange(group)
+                            if (group === 'auto') {
+                              form.setValue('cross_group_retry', true, {
+                                shouldDirty: true,
+                              })
+                              return
+                            }
+                            form.setValue('cross_group_retry', false, {
+                              shouldDirty: true,
+                            })
+                          }}
+                          placeholder={t('Select a group')}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              {routingMode === 'single' && selectedGroup === 'auto' && (
                 <FormField
                   control={form.control}
                   name='auto_groups'
@@ -487,7 +609,7 @@ export function ApiKeysMutateDrawer({
                 />
               )}
 
-              {selectedGroup === 'auto' && (
+              {routingMode === 'single' && selectedGroup === 'auto' && (
                 <FormField
                   control={form.control}
                   name='cross_group_retry'
@@ -513,6 +635,26 @@ export function ApiKeysMutateDrawer({
                   )}
                 />
               )}
+
+              {routingMode === 'managed' &&
+                isUpdate &&
+                apiKeyData?.data?.groups &&
+                apiKeyData.data.groups.length > 0 && (
+                  <div className='space-y-3 border-t pt-4'>
+                    <div className='flex items-center gap-2 text-sm font-medium'>
+                      <Layers3 className='size-4' />
+                      {t('Managed group status')}
+                    </div>
+                    <ManagedTokenGroups
+                      tokenId={apiKeyData.data.id}
+                      groups={apiKeyData.data.groups}
+                      onChanged={async () => {
+                        await refetchApiKey()
+                        triggerRefresh()
+                      }}
+                    />
+                  </div>
+                )}
 
               <FormField
                 control={form.control}

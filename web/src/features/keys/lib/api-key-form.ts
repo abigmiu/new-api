@@ -28,7 +28,11 @@ import type { ApiKey, ApiKeyFormData } from '../types'
 // Form Schema
 // ============================================================================
 
-export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
+export function getApiKeyFormSchema(
+  t: TFunction,
+  maxAutoGroups = 5,
+  maxManagedGroups = 20
+) {
   const autoGroupLimit =
     Number.isInteger(maxAutoGroups) && maxAutoGroups > 0 ? maxAutoGroups : 5
 
@@ -41,13 +45,33 @@ export function getApiKeyFormSchema(t: TFunction, maxAutoGroups = 5) {
       model_limits: z.array(z.string()),
       allow_ips: z.string().optional(),
       group: z.string().min(1, t('Please select a group')),
+      routing_mode: z.enum(['single', 'managed']),
+      groups: z.array(z.number()),
       auto_groups_mode: z.enum(['inherit', 'custom']),
       auto_groups: z.array(z.string()),
       cross_group_retry: z.boolean().optional(),
       tokenCount: z.number().min(1).optional(),
     })
     .superRefine((data, ctx) => {
-      if (data.group === 'auto') {
+      if (data.routing_mode === 'managed') {
+        if (data.groups.length === 0) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['groups'],
+            message: t('Select at least one managed group'),
+          })
+        }
+        if (data.groups.length > maxManagedGroups) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['groups'],
+            message: t('Select at most {{max}} managed groups', {
+              max: maxManagedGroups,
+            }),
+          })
+        }
+      }
+      if (data.routing_mode === 'single' && data.group === 'auto') {
         if (
           data.auto_groups_mode === 'custom' &&
           data.auto_groups.length === 0
@@ -111,6 +135,8 @@ export const API_KEY_FORM_DEFAULT_VALUES: ApiKeyFormValues = {
   model_limits: [],
   allow_ips: '',
   group: DEFAULT_GROUP,
+  routing_mode: 'single',
+  groups: [],
   auto_groups_mode: 'inherit',
   auto_groups: [],
   cross_group_retry: true,
@@ -123,6 +149,8 @@ export function getApiKeyFormDefaultValues(
   return {
     ...API_KEY_FORM_DEFAULT_VALUES,
     group: defaultUseAutoGroup ? 'auto' : DEFAULT_GROUP,
+    routing_mode: 'single',
+    groups: [],
     auto_groups_mode: 'inherit',
     auto_groups: [],
     cross_group_retry: defaultUseAutoGroup,
@@ -151,12 +179,18 @@ export function transformFormDataToPayload(
     model_limits_enabled: data.model_limits.length > 0,
     model_limits: data.model_limits.join(','),
     allow_ips: data.allow_ips || '',
-    group: data.group,
+    group: data.routing_mode === 'managed' ? '' : data.group,
+    groups: data.routing_mode === 'managed' ? data.groups : [],
     auto_groups:
-      data.group === 'auto' && data.auto_groups_mode === 'custom'
+      data.routing_mode === 'single' &&
+      data.group === 'auto' &&
+      data.auto_groups_mode === 'custom'
         ? data.auto_groups
         : [],
-    cross_group_retry: data.group === 'auto' ? !!data.cross_group_retry : false,
+    cross_group_retry:
+      data.routing_mode === 'managed' || data.group === 'auto'
+        ? !!data.cross_group_retry
+        : false,
   }
 }
 
@@ -190,6 +224,11 @@ export function transformApiKeyToFormDefaults(
       : [],
     allow_ips: apiKey.allow_ips || '',
     group: apiKey.group || DEFAULT_GROUP,
+    routing_mode:
+      apiKey.groups && apiKey.groups.length > 0 ? 'managed' : 'single',
+    groups: (apiKey.groups || [])
+      .sort((a, b) => a.position - b.position)
+      .map((group) => group.binding_id),
     auto_groups_mode: autoGroupsMode,
     auto_groups: autoGroups,
     cross_group_retry: !!apiKey.cross_group_retry,

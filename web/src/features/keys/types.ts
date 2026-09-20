@@ -35,6 +35,32 @@ export const apiKeySchema = z.object({
   accessed_time: z.number(),
   group: z.string().nullish().default(''),
   auto_groups: z.array(z.string()).nullish().default(null),
+  groups: z
+    .array(
+      z.object({
+        binding_id: z.number(),
+        local_group: z.string(),
+        display_name: z.string(),
+        position: z.number(),
+        enabled: z.boolean(),
+        effective_enabled: z.boolean(),
+        state: z.enum([
+          'active',
+          'price_changed',
+          'group_unavailable',
+          'user_disabled',
+        ]),
+        accepted_price_version: z.number(),
+        current_price_version: z.number(),
+        accepted_source_ratio: z.string(),
+        accepted_sale_ratio: z.string(),
+        current_source_ratio: z.string(),
+        current_sale_ratio: z.string(),
+        local_channel_id: z.number().nullish(),
+      })
+    )
+    .nullish()
+    .default(null),
   cross_group_retry: z
     .preprocess((v) => {
       if (v === 1) return true
@@ -93,11 +119,25 @@ export interface ApiKeyFormData {
   allow_ips: string
   group: string
   auto_groups: string[]
+  groups: number[]
   cross_group_retry: boolean
 }
 
 export interface TokenAutoGroupsConfig {
   groups: string[]
+  max_count: number
+}
+
+export interface TokenGroupOption {
+  binding_id: number
+  value: string
+  label: string
+  price_version: number
+  sale_ratio: string
+}
+
+export interface TokenGroupsConfig {
+  groups: TokenGroupOption[]
   max_count: number
 }
 

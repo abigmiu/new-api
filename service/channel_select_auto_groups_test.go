@@ -127,3 +127,65 @@ func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(
 	assert.Equal(t, "default", selectedGroup)
 	assert.Equal(t, "default", common.GetContextKeyString(ctx, constant.ContextKeyAutoGroup))
 }
+
+func TestCacheGetRandomSatisfiedChannelSkipsOnlyPriceChangedTokenGroup(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	const modelName = "managed-groups-runtime-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2201, "uo-a", modelName)
+	createChannelSelectAutoGroupsChannel(t, db, 2202, "uo-b", modelName)
+	createChannelSelectAutoGroupsChannel(t, db, 2203, "uo-c", modelName)
+	createChannelSelectAutoGroupsChannel(t, db, 2204, "uo-d", modelName)
+	model.InitChannelCache()
+
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []model.TokenGroupBindingView{
+		{BindingId: 1, LocalGroup: "uo-a", EffectiveEnabled: false, State: "price_changed", AcceptedSaleRatio: "0.089"},
+		{BindingId: 2, LocalGroup: "uo-b", EffectiveEnabled: true, State: "active", AcceptedSourceRatio: "0.100", AcceptedSaleRatio: "0.118", AcceptedPriceVersion: 1},
+		{BindingId: 3, LocalGroup: "uo-c", EffectiveEnabled: true, State: "active", AcceptedSaleRatio: "0.236", AcceptedPriceVersion: 1},
+	})
+	retry := 0
+	param := &RetryParam{Ctx: ctx, ModelName: modelName, RequestPath: "/v1/chat/completions", Retry: &retry}
+
+	first, selectedGroup, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, first)
+	assert.Equal(t, 2202, first.Id)
+	assert.Equal(t, "uo-b", selectedGroup)
+	assert.Equal(t, "0.118", common.GetContextKeyString(ctx, constant.ContextKeyTokenGroupSaleRatio))
+	bindingId, ok := common.GetContextKeyType[int64](ctx, constant.ContextKeyTokenGroupBindingId)
+	require.True(t, ok)
+	assert.Equal(t, int64(2), bindingId)
+	assert.Equal(t, "0.100", common.GetContextKeyString(ctx, constant.ContextKeyTokenGroupSourceRatio))
+
+	param.IncreaseRetry()
+	second, selectedGroup, err := CacheGetRandomSatisfiedChannel(param)
+	require.NoError(t, err)
+	require.NotNil(t, second)
+	assert.Equal(t, 2203, second.Id)
+	assert.Equal(t, "uo-c", selectedGroup)
+	assert.NotEqual(t, 2204, second.Id)
+}
+
+func TestCacheGetRandomSatisfiedChannelKeepsCurrentPriceGroupAvailableForOtherToken(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	const modelName = "managed-group-current-price-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2301, "uo-a", modelName)
+	model.InitChannelCache()
+
+	gin.SetMode(gin.TestMode)
+	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []model.TokenGroupBindingView{
+		{BindingId: 1, LocalGroup: "uo-a", EffectiveEnabled: true, State: "active", AcceptedSaleRatio: "0.090", AcceptedPriceVersion: 2},
+	})
+	retry := 0
+	channel, selectedGroup, err := CacheGetRandomSatisfiedChannel(&RetryParam{
+		Ctx: ctx, ModelName: modelName, RequestPath: "/v1/chat/completions", Retry: &retry,
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, channel)
+	assert.Equal(t, 2301, channel.Id)
+	assert.Equal(t, "uo-a", selectedGroup)
+	assert.Equal(t, "0.090", common.GetContextKeyString(ctx, constant.ContextKeyTokenGroupSaleRatio))
+}

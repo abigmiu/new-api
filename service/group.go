@@ -106,6 +106,18 @@ func GetRequestAutoGroups(c *gin.Context, userGroup string) []string {
 	return FilterUserTokenAutoGroups(userGroup, groups)
 }
 
+func GetRequestTokenGroups(c *gin.Context) ([]model.TokenGroupBindingView, bool) {
+	value, ok := common.GetContextKey(c, constant.ContextKeyTokenGroups)
+	if !ok {
+		return nil, false
+	}
+	groups, ok := value.([]model.TokenGroupBindingView)
+	if !ok {
+		return []model.TokenGroupBindingView{}, true
+	}
+	return groups, true
+}
+
 // GetGroupsEnabledModels 按 groups 顺序获取各分组启用的模型并去重
 func GetGroupsEnabledModels(groups []string) []string {
 	seen := make(map[string]struct{})

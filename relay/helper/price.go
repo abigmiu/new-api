@@ -2,9 +2,11 @@ package helper
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
@@ -53,6 +55,14 @@ func HandleGroupRatio(ctx *gin.Context, relayInfo *relaycommon.RelayInfo) hostty
 	if exists {
 		logger.LogDebug(ctx, "final group: %s", autoGroup)
 		relayInfo.UsingGroup = autoGroup.(string)
+	}
+	if rawRatio := common.GetContextKeyString(ctx, constant.ContextKeyTokenGroupSaleRatio); rawRatio != "" {
+		ratio, err := strconv.ParseFloat(rawRatio, 64)
+		if err == nil && ratio > 0 {
+			relayInfo.UsingGroup = common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup)
+			groupRatioInfo.GroupRatio = ratio
+			return groupRatioInfo
+		}
 	}
 
 	// check user group special ratio

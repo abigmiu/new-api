@@ -247,6 +247,9 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.GET("/", controller.GetAllTokens)
 			tokenRoute.GET("/search", middleware.SearchRateLimit(), controller.SearchTokens)
 			tokenRoute.GET("/auto-groups", controller.GetTokenAutoGroups)
+			tokenRoute.GET("/groups", controller.GetTokenGroups)
+			tokenRoute.POST("/:id/groups/:binding_id/accept-price", controller.AcceptTokenGroupPrice)
+			tokenRoute.POST("/:id/groups/:binding_id/disable", controller.DisableTokenGroup)
 			tokenRoute.GET("/:id", controller.GetToken)
 			tokenRoute.POST("/:id/key", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKey)
 			tokenRoute.POST("/", controller.AddToken)
@@ -254,6 +257,15 @@ func SetApiRouter(router *gin.Engine) {
 			tokenRoute.DELETE("/:id", controller.DeleteToken)
 			tokenRoute.POST("/batch", controller.DeleteTokenBatch)
 			tokenRoute.POST("/batch/keys", middleware.CriticalRateLimit(), middleware.DisableCache(), controller.GetTokenKeysBatch)
+		}
+		upstreamGroupRoute := apiRouter.Group("/upstream-groups")
+		upstreamGroupRoute.Use(middleware.RootAuth())
+		{
+			upstreamGroupRoute.GET("", controller.ListUpstreamGroups)
+			upstreamGroupRoute.POST("/sync", middleware.CriticalRateLimit(), controller.SyncUpstreamGroups)
+			upstreamGroupRoute.POST("/:id/enable", middleware.CriticalRateLimit(), controller.EnableUpstreamGroup)
+			upstreamGroupRoute.POST("/:id/disable", middleware.CriticalRateLimit(), controller.DisableUpstreamGroup)
+			upstreamGroupRoute.GET("/:id/events", controller.ListUpstreamGroupEvents)
 		}
 
 		usageRoute := apiRouter.Group("/usage")

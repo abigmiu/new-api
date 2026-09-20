@@ -32,6 +32,7 @@ const domGlobals = [
   'HTMLFormElement',
   'SVGElement',
   'Node',
+  'NodeFilter',
   'Element',
   'Event',
   'KeyboardEvent',
@@ -59,6 +60,12 @@ const { createInstance } = await import('i18next')
 const { I18nextProvider, initReactI18next } = await import('react-i18next')
 const { QueryClient, QueryClientProvider } =
   await import('@tanstack/react-query')
+const {
+  createMemoryHistory,
+  createRootRoute,
+  createRouter,
+  RouterContextProvider,
+} = await import('@tanstack/react-router')
 const { api } = await import('@/lib/api')
 const { ApiKeysProvider } = await import('../api-keys-provider')
 const { ApiKeysMutateDrawer } = await import('../api-keys-mutate-drawer')
@@ -113,6 +120,22 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
           data: {
             success: true,
             data: { groups: ['vip', 'default'], max_count: 3 },
+          },
+        }
+      case '/api/token/groups':
+        return {
+          data: {
+            success: true,
+            data: {
+              groups: Array.from({ length: 10 }, (_, index) => ({
+                binding_id: index + 1,
+                value: `uo-${index + 1}`,
+                label: `Managed ${index + 1}`,
+                price_version: 1,
+                sale_ratio: `1.${index + 1}`,
+              })),
+              max_count: 10,
+            },
           },
         }
       default:
@@ -192,16 +215,39 @@ async function renderCreateDrawer(): Promise<void> {
     },
     { updatedAt: freshAt }
   )
+  queryClient.setQueryData(
+    ['token-groups'],
+    {
+      success: true,
+      data: {
+        groups: Array.from({ length: 10 }, (_, index) => ({
+          binding_id: index + 1,
+          value: `uo-${index + 1}`,
+          label: `Managed ${index + 1}`,
+          price_version: 1,
+          sale_ratio: `1.${index + 1}`,
+        })),
+        max_count: 10,
+      },
+    },
+    { updatedAt: freshAt }
+  )
   renderedDrawer = { host, queryClient, root }
+  const router = createRouter({
+    routeTree: createRootRoute(),
+    history: createMemoryHistory({ initialEntries: ['/'] }),
+  })
 
   await act(async () =>
     root.render(
       <QueryClientProvider client={queryClient}>
-        <I18nextProvider i18n={i18n}>
-          <ApiKeysProvider>
-            <ApiKeysMutateDrawer open onOpenChange={() => undefined} />
-          </ApiKeysProvider>
-        </I18nextProvider>
+        <RouterContextProvider router={router}>
+          <I18nextProvider i18n={i18n}>
+            <ApiKeysProvider>
+              <ApiKeysMutateDrawer open onOpenChange={() => undefined} />
+            </ApiKeysProvider>
+          </I18nextProvider>
+        </RouterContextProvider>
       </QueryClientProvider>
     )
   )
@@ -367,5 +413,59 @@ describe('API keys mutate drawer Auto group integration', () => {
       )
     )
     assert.deepEqual(createdPayloads[0]?.auto_groups, ['vip'])
+  })
+
+  test('submits only three selected managed groups out of ten options', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    await renderCreateDrawer()
+
+    const managedMode = findButton('Managed groups', true)
+    await act(async () => managedMode.click())
+    const selector = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Select managed groups"]'
+    )
+    assert.ok(selector)
+    for (const label of ['Managed 2', 'Managed 5', 'Managed 9']) {
+      await act(async () => {
+        selector.focus()
+        selector.dispatchEvent(
+          new domWindow.KeyboardEvent('keydown', {
+            key: 'ArrowDown',
+            bubbles: true,
+          }) as unknown as KeyboardEvent
+        )
+      })
+      await act(async () =>
+        waitForCondition(
+          () =>
+            [
+              ...document.querySelectorAll<HTMLElement>(
+                '[data-slot="combobox-item"]'
+              ),
+            ].some((candidate) => candidate.textContent?.includes(label)),
+          `Managed option ${label} did not open`
+        )
+      )
+      const option = [
+        ...document.querySelectorAll<HTMLElement>(
+          '[data-slot="combobox-item"]'
+        ),
+      ].find((candidate) => candidate.textContent?.includes(label))
+      assert.ok(option, `Expected managed option ${label}`)
+      await act(async () => option.click())
+    }
+
+    await changeInput(getControlByLabel<HTMLInputElement>('Name'), 'managed')
+    await act(async () => findButton('Save changes', true).click())
+    await act(async () =>
+      waitForCondition(
+        () => createdPayloads.length === 1,
+        'managed API key was not created'
+      )
+    )
+
+    assert.deepEqual(createdPayloads[0]?.groups, [2, 5, 9])
+    assert.equal(createdPayloads[0]?.group, '')
   })
 })

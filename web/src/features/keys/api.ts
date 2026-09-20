@@ -26,6 +26,7 @@ import type {
   SearchApiKeysParams,
   ApiKeyFormData,
   TokenAutoGroupsConfig,
+  TokenGroupsConfig,
 } from './types'
 
 // ============================================================================
@@ -66,6 +67,35 @@ export async function getTokenAutoGroups(): Promise<
   ApiResponse<TokenAutoGroupsConfig>
 > {
   const res = await api.get('/api/token/auto-groups')
+  return res.data
+}
+
+export async function getTokenGroups(): Promise<
+  ApiResponse<TokenGroupsConfig>
+> {
+  const res = await api.get('/api/token/groups')
+  return res.data
+}
+
+export async function acceptTokenGroupPrice(
+  tokenId: number,
+  bindingId: number,
+  priceVersion: number
+): Promise<ApiResponse> {
+  const res = await api.post(
+    `/api/token/${tokenId}/groups/${bindingId}/accept-price`,
+    { price_version: priceVersion }
+  )
+  return res.data
+}
+
+export async function disableTokenGroup(
+  tokenId: number,
+  bindingId: number
+): Promise<ApiResponse> {
+  const res = await api.post(
+    `/api/token/${tokenId}/groups/${bindingId}/disable`
+  )
   return res.data
 }
 

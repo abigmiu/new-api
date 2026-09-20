@@ -202,6 +202,7 @@ export function useApiKeysColumns(now: number): ColumnDef<ApiKey>[] {
             ratio={groupRatios[group]}
             crossGroupRetry={apiKey.cross_group_retry}
             shouldReduceMotion={shouldReduceMotion}
+            groups={apiKey.groups}
           />
         )
       },

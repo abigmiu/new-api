@@ -86,7 +86,42 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	selectGroup := param.TokenGroup
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
 
-	if param.TokenGroup == "auto" {
+	if tokenGroups, managed := GetRequestTokenGroups(param.Ctx); managed {
+		if len(tokenGroups) == 0 {
+			return nil, selectGroup, errors.New("token groups are unavailable")
+		}
+		startGroupIndex := common.GetContextKeyInt(param.Ctx, constant.ContextKeyTokenGroupIndex)
+		for i := startGroupIndex; i < len(tokenGroups); i++ {
+			group := tokenGroups[i]
+			if !group.EffectiveEnabled {
+				continue
+			}
+			priorityRetry := param.GetRetry()
+			if i > startGroupIndex {
+				priorityRetry = 0
+			}
+			channel, _ = model.GetRandomSatisfiedChannel(group.LocalGroup, param.ModelName, priorityRetry, param.RequestPath)
+			if channel == nil {
+				common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupIndex, i+1)
+				param.SetRetry(0)
+				continue
+			}
+			selectGroup = group.LocalGroup
+			common.SetContextKey(param.Ctx, constant.ContextKeyUsingGroup, group.LocalGroup)
+			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupBindingId, group.BindingId)
+			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupSourceRatio, group.AcceptedSourceRatio)
+			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupSaleRatio, group.AcceptedSaleRatio)
+			common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupPriceVersion, group.AcceptedPriceVersion)
+			if priorityRetry >= common.RetryTimes {
+				common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupIndex, i+1)
+				param.SetRetry(0)
+				param.ResetRetryNextTry()
+			} else {
+				common.SetContextKey(param.Ctx, constant.ContextKeyTokenGroupIndex, i)
+			}
+			break
+		}
+	} else if param.TokenGroup == "auto" {
 		autoGroups := GetRequestAutoGroups(param.Ctx, userGroup)
 		if len(autoGroups) == 0 {
 			return nil, selectGroup, errors.New("auto groups is not enabled")

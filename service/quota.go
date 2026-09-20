@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 
@@ -106,6 +107,14 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	audioInputTokens := usage.InputTokenDetails.AudioTokens
 	audioOutTokens := usage.OutputTokenDetails.AudioTokens
 	groupRatio := ratio_setting.GetGroupRatio(relayInfo.UsingGroup)
+	managedGroup := false
+	if managedRatio := common.GetContextKeyString(ctx, constant.ContextKeyTokenGroupSaleRatio); managedRatio != "" {
+		if parsed, parseErr := strconv.ParseFloat(managedRatio, 64); parseErr == nil && parsed > 0 {
+			groupRatio = parsed
+			managedGroup = true
+			relayInfo.UsingGroup = common.GetContextKeyString(ctx, constant.ContextKeyUsingGroup)
+		}
+	}
 	modelRatio, _, _ := ratio_setting.GetModelRatio(modelName)
 
 	autoGroup, exists := common.GetContextKey(ctx, constant.ContextKeyAutoGroup)
@@ -116,9 +125,11 @@ func PreWssConsumeQuota(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, usag
 	}
 
 	actualGroupRatio := groupRatio
-	userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)
-	if ok {
-		actualGroupRatio = userGroupRatio
+	if !managedGroup {
+		userGroupRatio, ok := ratio_setting.GetGroupGroupRatio(relayInfo.UserGroup, relayInfo.UsingGroup)
+		if ok {
+			actualGroupRatio = userGroupRatio
+		}
 	}
 
 	quotaInfo := QuotaInfo{

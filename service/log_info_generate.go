@@ -107,6 +107,13 @@ func GenerateTextOtherInfo(ctx *gin.Context, relayInfo *relaycommon.RelayInfo, m
 	}
 
 	AppendChannelAffinityAdminInfo(ctx, adminInfo)
+	if bindingId, ok := common.GetContextKeyType[int64](ctx, constant.ContextKeyTokenGroupBindingId); ok && bindingId > 0 {
+		adminInfo["upstream_group_binding_id"] = bindingId
+		priceVersion, _ := common.GetContextKeyType[int64](ctx, constant.ContextKeyTokenGroupPriceVersion)
+		adminInfo["upstream_group_price_version"] = priceVersion
+		adminInfo["upstream_group_source_ratio"] = common.GetContextKeyString(ctx, constant.ContextKeyTokenGroupSourceRatio)
+		adminInfo["upstream_group_sale_ratio"] = common.GetContextKeyString(ctx, constant.ContextKeyTokenGroupSaleRatio)
+	}
 
 	other["admin_info"] = adminInfo
 	appendRequestPath(ctx, relayInfo, other)
