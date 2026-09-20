@@ -551,6 +551,15 @@ export const STATIC_I18N_KEYS = [
   'The model that was requested',
   'The upstream channel that served the requests',
 
+  // Channel performance metric columns (labels passed to t at runtime)
+  'Supplier',
+  'Success rate',
+  'Latency',
+  'Average TTFT',
+  'Cache hit rate',
+  'Cache rate',
+  'Trend',
+
   // Misc
   'Cancel',
   'Status',

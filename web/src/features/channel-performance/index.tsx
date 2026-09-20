@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { useQuery } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { RefreshCw } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { SectionPageLayout } from '@/components/layout'
@@ -31,49 +31,64 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { getSuccessRateLevel } from '@/features/performance-metrics/lib/format'
 import { cn } from '@/lib/utils'
 
 import { getChannelPerformance } from './api'
+import { PerformanceTable } from './components/performance-table'
+import {
+  DEFAULT_CHANNEL_PERFORMANCE_SORT,
+  sortPerformanceRows,
+} from './lib/sort'
 import type {
-  ChannelPerformanceBucket,
   ChannelPerformanceRange,
-  ManagedGroupPerformance,
+  ChannelPerformanceRow,
+  ChannelPerformanceSortKey,
 } from './types'
 
 const ranges: ChannelPerformanceRange[] = ['1h', '24h', '7d']
 
-function percent(value: number | null): string {
-  return value == null || !Number.isFinite(value) ? '—' : `${value.toFixed(2)}%`
-}
-
-function duration(value: number): string {
-  if (!value) return '—'
-  if (value < 1000) return `${value.toFixed(0)}ms`
-  return `${(value / 1000).toFixed(2)}s`
-}
-
-function throughput(value: number): string {
-  return value > 0 ? `${value.toFixed(1)} t/s` : '—'
-}
+const ALL_SUPPLIERS = 'all'
 
 export function ChannelPerformance() {
   const { t } = useTranslation()
   const [range, setRange] = useState<ChannelPerformanceRange>('1h')
-  const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(
-    null
-  )
+  const [selectedTab, setSelectedTab] = useState<string>(ALL_SUPPLIERS)
+  const [sort, setSort] = useState(DEFAULT_CHANNEL_PERFORMANCE_SORT)
   const performanceQuery = useQuery({
     queryKey: ['channel-performance', range],
     queryFn: () => getChannelPerformance(range),
     refetchInterval: range === '1h' ? 30_000 : 60_000,
     staleTime: 15_000,
   })
-  const suppliers = performanceQuery.data?.data.suppliers ?? []
-  const selectedSupplier =
-    suppliers.find(
-      (supplier) => supplier.upstream_channel_id === selectedSupplierId
-    ) ?? suppliers[0]
+  const suppliers = useMemo(
+    () => performanceQuery.data?.data.suppliers ?? [],
+    [performanceQuery.data]
+  )
+  const showAll = selectedTab === ALL_SUPPLIERS
+  const visibleSupplier = suppliers.find(
+    (supplier) => String(supplier.upstream_channel_id) === selectedTab
+  )
+  const rows = useMemo<ChannelPerformanceRow[]>(() => {
+    const all = suppliers.flatMap((supplier) =>
+      supplier.groups.map((group) => ({
+        supplierId: supplier.upstream_channel_id,
+        supplierName: supplier.upstream_channel_name,
+        group,
+      }))
+    )
+    if (showAll) return all
+    return all.filter((row) => String(row.supplierId) === selectedTab)
+  }, [suppliers, showAll, selectedTab])
+  const sortedRows = useMemo(
+    () => sortPerformanceRows(rows, sort),
+    [rows, sort]
+  )
+  const toggleSort = (key: ChannelPerformanceSortKey) =>
+    setSort((current) =>
+      current.key === key
+        ? { key, descending: !current.descending }
+        : { key, descending: false }
+    )
 
   let content: ReactNode
   if (performanceQuery.isError) {
@@ -90,7 +105,7 @@ export function ChannelPerformance() {
         ))}
       </div>
     )
-  } else if (!selectedSupplier) {
+  } else if (suppliers.length === 0 || (!showAll && !visibleSupplier)) {
     content = (
       <div className='text-muted-foreground border py-12 text-center text-sm'>
         {t('No enabled managed groups')}
@@ -98,43 +113,24 @@ export function ChannelPerformance() {
     )
   } else {
     content = (
-      <div className='space-y-6'>
-        <section key={selectedSupplier.upstream_channel_id}>
-          <div className='mb-2 flex items-baseline gap-2'>
-            <h2 className='text-base font-semibold'>
-              {selectedSupplier.upstream_channel_name}
-            </h2>
-            <span className='text-muted-foreground text-xs'>
-              {t('{{count}} groups', { count: selectedSupplier.groups.length })}
-            </span>
-          </div>
-          <div className='overflow-x-auto border'>
-            <table className='w-full min-w-[1080px] text-sm'>
-              <thead className='bg-muted/40 text-muted-foreground'>
-                <tr className='border-b text-left'>
-                  <th className='px-3 py-2 font-medium'>{t('Group')}</th>
-                  <th className='px-3 py-2 font-medium'>{t('Price')}</th>
-                  <th className='px-3 py-2 font-medium'>{t('Requests')}</th>
-                  <th className='px-3 py-2 font-medium'>{t('Success rate')}</th>
-                  <th className='px-3 py-2 font-medium'>{t('Latency')}</th>
-                  <th className='px-3 py-2 font-medium'>{t('Average TTFT')}</th>
-                  <th className='px-3 py-2 font-medium'>TPS</th>
-                  <th className='px-3 py-2 font-medium'>
-                    {t('Cache hit rate')}
-                  </th>
-                  <th className='px-3 py-2 font-medium'>{t('Cache rate')}</th>
-                  <th className='w-48 px-3 py-2 font-medium'>{t('Trend')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {selectedSupplier.groups.map((group) => (
-                  <GroupPerformanceRow key={group.binding_id} group={group} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
+      <section>
+        <div className='mb-2 flex items-baseline gap-2'>
+          <h2 className='text-base font-semibold'>
+            {showAll
+              ? t('All')
+              : (visibleSupplier?.upstream_channel_name ?? '')}
+          </h2>
+          <span className='text-muted-foreground text-xs'>
+            {t('{{count}} groups', { count: sortedRows.length })}
+          </span>
+        </div>
+        <PerformanceTable
+          rows={sortedRows}
+          showSupplier={showAll}
+          sort={sort}
+          onSortChange={toggleSort}
+        />
+      </section>
     )
   }
 
@@ -193,13 +189,12 @@ export function ChannelPerformance() {
           </div>
           {suppliers.length > 0 ? (
             <Tabs
-              value={String(selectedSupplier?.upstream_channel_id ?? '')}
-              onValueChange={(value) =>
-                value !== null && setSelectedSupplierId(Number(value))
-              }
+              value={selectedTab}
+              onValueChange={(value) => value !== null && setSelectedTab(value)}
               className='overflow-x-auto'
             >
               <TabsList>
+                <TabsTrigger value={ALL_SUPPLIERS}>{t('All')}</TabsTrigger>
                 {suppliers.map((supplier) => (
                   <TabsTrigger
                     key={supplier.upstream_channel_id}
@@ -215,114 +210,5 @@ export function ChannelPerformance() {
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>
-  )
-}
-
-function GroupPerformanceRow(props: { group: ManagedGroupPerformance }) {
-  const { t } = useTranslation()
-  const group = props.group
-  return (
-    <tr className='border-b last:border-b-0'>
-      <td className='max-w-72 px-3 py-3 align-top'>
-        <div className='font-medium'>{group.group_name}</div>
-        {group.description ? (
-          <div className='text-muted-foreground mt-1 line-clamp-2 text-xs'>
-            {group.description}
-          </div>
-        ) : null}
-      </td>
-      <MetricCell value={group.sale_ratio || '—'} />
-      <MetricCell value={group.attempt_count.toLocaleString()} />
-      <MetricCell
-        value={group.attempt_count ? percent(group.success_rate) : '—'}
-      />
-      <MetricCell value={duration(group.avg_latency_ms)} />
-      <MetricCell value={duration(group.avg_ttft_ms)} />
-      <MetricCell value={throughput(group.avg_tps)} />
-      <MetricCell value={percent(group.cache_hit_rate)} />
-      <MetricCell value={percent(group.cache_rate)} />
-      <td className='px-3 py-3'>
-        {group.series.length > 0 ? (
-          <PerformanceBars series={group.series} />
-        ) : (
-          <span className='text-muted-foreground text-xs'>{t('No data')}</span>
-        )}
-      </td>
-    </tr>
-  )
-}
-
-function MetricCell(props: { value: string }) {
-  return (
-    <td className='px-3 py-3 align-top font-mono whitespace-nowrap tabular-nums'>
-      {props.value}
-    </td>
-  )
-}
-
-function PerformanceBars(props: { series: ChannelPerformanceBucket[] }) {
-  const { t } = useTranslation()
-  return (
-    <div
-      className='flex h-9 items-end gap-0.5'
-      aria-label={t('Success rate trend')}
-    >
-      {props.series.map((bucket) => {
-        const hasData = bucket.attempt_count > 0
-        const height = hasData ? Math.max(8, bucket.success_rate) : 8
-        const colorClass = hasData
-          ? {
-              excellent: 'bg-emerald-500',
-              good: 'bg-emerald-400',
-              warning: 'bg-amber-500',
-              critical: 'bg-red-500',
-              unknown: 'bg-muted',
-            }[getSuccessRateLevel(bucket.success_rate)]
-          : 'bg-muted'
-        return (
-          <Tooltip key={bucket.start_ts}>
-            <TooltipTrigger
-              render={
-                <button
-                  type='button'
-                  className={cn(
-                    'focus-visible:ring-ring min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2',
-                    colorClass
-                  )}
-                  style={{ height: `${height}%` }}
-                  aria-label={`${dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')} · ${percent(bucket.success_rate)}`}
-                />
-              }
-            />
-            <TooltipContent>
-              <span>{dayjs.unix(bucket.start_ts).format('MM-DD HH:mm')}</span>
-              <br />
-              <span>
-                {t('Requests')}: {bucket.attempt_count}
-              </span>
-              <br />
-              <span>
-                {t('Success rate')}: {percent(bucket.success_rate)}
-              </span>
-              <br />
-              <span>
-                {t('Average latency')}:{' '}
-                {duration(
-                  bucket.total_latency_ms && bucket.attempt_count
-                    ? bucket.total_latency_ms / bucket.attempt_count
-                    : 0
-                )}
-              </span>
-              <br />
-              <span>
-                {t('Average TTFT')}: {duration(bucket.avg_ttft_ms)}
-              </span>
-              <br />
-              <span>TPS: {throughput(bucket.avg_tps)}</span>
-            </TooltipContent>
-          </Tooltip>
-        )
-      })}
-    </div>
   )
 }

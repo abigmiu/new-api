@@ -53,6 +53,29 @@ export type ChannelPerformanceSupplier = {
   groups: ManagedGroupPerformance[]
 }
 
+export type ChannelPerformanceSortKey =
+  | 'supplier'
+  | 'group'
+  | 'sale_ratio'
+  | 'attempt_count'
+  | 'success_rate'
+  | 'avg_latency_ms'
+  | 'avg_ttft_ms'
+  | 'avg_tps'
+  | 'cache_hit_rate'
+  | 'cache_rate'
+
+export type ChannelPerformanceSort = {
+  key: ChannelPerformanceSortKey
+  descending: boolean
+}
+
+export type ChannelPerformanceRow = {
+  supplierId: number
+  supplierName: string
+  group: ManagedGroupPerformance
+}
+
 export type ChannelPerformanceResponse = {
   success: boolean
   message?: string

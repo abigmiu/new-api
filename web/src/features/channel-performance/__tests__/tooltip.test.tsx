@@ -167,6 +167,17 @@ describe('channel performance tooltip', () => {
         </QueryClientProvider>
       )
     })
+    const tabNamed = (name: string) =>
+      [
+        ...container.querySelectorAll<HTMLButtonElement>(
+          'button[data-slot="tabs-trigger"]'
+        ),
+      ].find((button) => button.textContent?.includes(name))
+
+    const primaryTab = tabNamed('Primary')
+    assert.ok(primaryTab)
+    await act(async () => primaryTab.click())
+
     const bar = container.querySelector<HTMLButtonElement>(
       'button[aria-label*="75.00%"]'
     )
@@ -187,11 +198,7 @@ describe('channel performance tooltip', () => {
     assert.match(tooltip.textContent ?? '', /Average TTFT: 300ms/)
     assert.match(tooltip.textContent ?? '', /TPS: 40.0 t\/s/)
 
-    const secondaryTab = [
-      ...container.querySelectorAll<HTMLButtonElement>(
-        'button[data-slot="tabs-trigger"]'
-      ),
-    ].find((button) => button.textContent?.includes('Secondary'))
+    const secondaryTab = tabNamed('Secondary')
     assert.ok(secondaryTab)
     await act(async () => secondaryTab.click())
     assert.equal(container.textContent?.includes('Managed group 3'), true)
