@@ -30,12 +30,12 @@ export function ChannelPreferenceHint(props: ChannelPreferenceHintProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-start gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2.5 py-1 text-xs font-medium text-warning',
+        'border-warning/40 bg-warning/10 text-warning inline-flex items-start gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium',
         props.className
       )}
     >
       <Lightbulb className='mt-px size-3.5 shrink-0' aria-hidden='true' />
-      <span className='whitespace-normal'>
+      <span className='line-clamp-2'>
         <Trans
           i18nKey='Check <1>Channel Performance</1> before choosing managed groups'
           components={{

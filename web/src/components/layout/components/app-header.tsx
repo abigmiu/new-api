@@ -26,6 +26,7 @@ import { useTopNavLinks } from '@/hooks/use-top-nav-links'
 
 import { defaultTopNavLinks } from '../config/top-nav.config'
 import type { TopNavLink } from '../types'
+import { ChannelPreferenceHint } from './channel-preference-hint'
 import { Header } from './header'
 import { SystemBrand } from './system-brand'
 import { TopNav } from './top-nav'
@@ -113,6 +114,8 @@ export function AppHeader({
   return (
     <Header>
       <SystemBrand variant='inline' />
+
+      <ChannelPreferenceHint className='hidden max-w-[20rem] md:inline-flex' />
 
       {leftContent ? (
         <div className='ms-2 flex items-center'>{leftContent}</div>

@@ -24,6 +24,7 @@ For commercial licensing, please contact support@quantumnous.com
 export { AppHeader } from './components/app-header'
 export { AppSidebar } from './components/app-sidebar'
 export { AuthenticatedLayout } from './components/authenticated-layout'
+export { ChannelPreferenceHint } from './components/channel-preference-hint'
 export { PublicLayout } from './components/public-layout'
 export { PublicHeader } from './components/public-header'
 export { PublicNavigation } from './components/public-navigation'
