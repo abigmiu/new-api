@@ -131,6 +131,7 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
                 binding_id: index + 1,
                 value: `uo-${index + 1}`,
                 label: `Managed ${index + 1}`,
+                description: `Managed group ${index + 1}`,
                 price_version: 1,
                 sale_ratio: `1.${index + 1}`,
               })),
@@ -224,6 +225,7 @@ async function renderCreateDrawer(): Promise<void> {
           binding_id: index + 1,
           value: `uo-${index + 1}`,
           label: `Managed ${index + 1}`,
+          description: `Managed group ${index + 1}`,
           price_version: 1,
           sale_ratio: `1.${index + 1}`,
         })),
@@ -422,11 +424,23 @@ describe('API keys mutate drawer Auto group integration', () => {
     installApiFixtures(createdPayloads)
     await renderCreateDrawer()
 
+    const sheetHeader = document.querySelector('[data-slot="sheet-header"]')
+    assert.ok(sheetHeader)
+    assert.equal(
+      sheetHeader.textContent?.includes('Channel Performance'),
+      true,
+      'Expected the channel performance hint at the top of the sheet'
+    )
+
     const selector = document.querySelector<HTMLInputElement>(
       'input[aria-label="Select managed groups"]'
     )
     assert.ok(selector)
-    for (const label of ['Managed 2', 'Managed 5', 'Managed 9']) {
+    for (const [label, description, ratio] of [
+      ['Managed 2', 'Managed group 2', '1.2x'],
+      ['Managed 5', 'Managed group 5', '1.5x'],
+      ['Managed 9', 'Managed group 9', '1.9x'],
+    ]) {
       await act(async () => {
         selector.focus()
         selector.dispatchEvent(
@@ -453,6 +467,14 @@ describe('API keys mutate drawer Auto group integration', () => {
         ),
       ].find((candidate) => candidate.textContent?.includes(label))
       assert.ok(option, `Expected managed option ${label}`)
+      assert.ok(
+        option.textContent?.includes(description),
+        `Expected managed option ${label} to show its description`
+      )
+      assert.ok(
+        option.textContent?.includes(ratio),
+        `Expected managed option ${label} to show its price`
+      )
       await act(async () => option.click())
     }
 
@@ -467,5 +489,57 @@ describe('API keys mutate drawer Auto group integration', () => {
 
     assert.deepEqual(createdPayloads[0]?.groups, [2, 5, 9])
     assert.equal(createdPayloads[0]?.group, '')
+  })
+
+  test('searches managed groups by name and by description', async () => {
+    const createdPayloads: Array<Record<string, unknown>> = []
+    installApiFixtures(createdPayloads)
+    await renderCreateDrawer()
+
+    const selector = document.querySelector<HTMLInputElement>(
+      'input[aria-label="Select managed groups"]'
+    )
+    assert.ok(selector)
+    await act(async () => {
+      selector.focus()
+      selector.dispatchEvent(
+        new domWindow.KeyboardEvent('keydown', {
+          key: 'ArrowDown',
+          bubbles: true,
+        }) as unknown as KeyboardEvent
+      )
+    })
+    await act(async () =>
+      waitForCondition(
+        () =>
+          document.querySelectorAll('[data-slot="combobox-item"]').length ===
+          10,
+        'Managed group options did not open'
+      )
+    )
+
+    for (const [query, expected] of [
+      ['Managed 7', 'Managed 7'],
+      ['Managed group 3', 'Managed 3'],
+    ]) {
+      await changeInput(selector, query)
+      await act(async () =>
+        waitForCondition(
+          () =>
+            document.querySelectorAll('[data-slot="combobox-item"]').length ===
+            1,
+          `Managed groups were not filtered for "${query}"`
+        )
+      )
+      const options = [
+        ...document.querySelectorAll<HTMLElement>(
+          '[data-slot="combobox-item"]'
+        ),
+      ]
+      assert.ok(
+        options[0].textContent?.includes(expected),
+        `Expected "${query}" to match ${expected}`
+      )
+    }
   })
 })

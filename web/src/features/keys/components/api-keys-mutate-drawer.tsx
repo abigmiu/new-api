@@ -40,7 +40,8 @@ import {
   sideDrawerHeaderClassName,
   sideDrawerSwitchItemClassName,
 } from '@/components/drawer-layout'
-import { MultiSelect } from '@/components/multi-select'
+import { ChannelPreferenceHint } from '@/components/layout'
+import { MultiSelect, type Option } from '@/components/multi-select'
 import { Button } from '@/components/ui/button'
 import {
   Collapsible,
@@ -96,6 +97,7 @@ import {
 } from './api-key-group-combobox'
 import { useApiKeys } from './api-keys-provider'
 import { AutoGroupOrderEditor } from './auto-group-order-editor'
+import { GroupRatioBadge } from './auto-group-visuals'
 import { ManagedTokenGroups } from './managed-token-groups'
 
 type ApiKeyMutateDrawerProps = {
@@ -212,20 +214,27 @@ export function ApiKeysMutateDrawer({
   const managedGroupOptions = useMemo(() => {
     const options = managedGroupsData?.data?.groups || []
     const historical = apiKeyData?.data?.groups || []
-    const byId = new Map(
-      options.map((group) => [
-        group.binding_id,
-        {
-          value: String(group.binding_id),
-          label: `${group.label} (${group.sale_ratio})`,
-        },
-      ])
-    )
+    const byId = new Map<number, Option>()
+    for (const group of options) {
+      byId.set(group.binding_id, {
+        value: String(group.binding_id),
+        label: group.label,
+        desc: group.description,
+        badge: (
+          <GroupRatioBadge ratio={Number(group.sale_ratio) || undefined} />
+        ),
+      })
+    }
     for (const group of historical) {
       if (!byId.has(group.binding_id)) {
         byId.set(group.binding_id, {
           value: String(group.binding_id),
-          label: `${group.display_name} (${group.current_sale_ratio})`,
+          label: group.display_name,
+          badge: (
+            <GroupRatioBadge
+              ratio={Number(group.current_sale_ratio) || undefined}
+            />
+          ),
         })
       }
     }
@@ -434,6 +443,7 @@ export function ApiKeysMutateDrawer({
               ? t('Update the API key by providing necessary info.')
               : t('Add a new API key by providing necessary info.')}
           </SheetDescription>
+          <ChannelPreferenceHint className='mt-2 self-start' />
         </SheetHeader>
         <Form {...form}>
           <form

@@ -41,6 +41,10 @@ import { cn } from '@/lib/utils'
 export type Option = {
   label: string
   value: string
+  /** Optional second line rendered under the label in the dropdown. */
+  desc?: string
+  /** Optional trailing content (for example a price badge) for the dropdown. */
+  badge?: React.ReactNode
 }
 
 interface MultiSelectProps {
@@ -99,7 +103,8 @@ function splitDraft(value: string): { completed: string[]; draft: string } {
  * MultiSelect — tags/chips style multi-select built on Base UI Combobox.
  *
  * Behaviour:
- * - Search filters built-in options (Base UI handles fuzzy filtering).
+ * - Search filters built-in options by label, description and value (Base UI
+ *   handles the input, the matcher lives in `filterOption`).
  * - When `allowCreate` is true, custom values can be added inline:
  *   - Type and press Enter / "," to add a single value.
  *   - Paste a comma- (or newline-) separated list to add many at once.
@@ -108,6 +113,9 @@ function splitDraft(value: string): { completed: string[]; draft: string } {
  * - Backspace on an empty input removes the last selected chip (Base UI default).
  * - `maxVisibleChips` can cap large selections and show a compact "+N more"
  *   summary so forms do not grow vertically without bound.
+ * - Options may carry a `desc` and a `badge`; the dropdown then renders a
+ *   two-line item (label + description) with the badge on the trailing side.
+ *   Chips still show the label only.
  *
  * Focus/border styling is inherited from `ComboboxChips`, which uses the same
  * tokens as `Input` so it stays visually consistent with other form fields.
@@ -129,12 +137,13 @@ export function MultiSelect(props: MultiSelectProps) {
     [props.selected]
   )
 
-  // Lookup of value -> display label so chips and items can show friendly names
-  // even when the underlying option list changes (e.g. custom-added values).
-  const labelMap = React.useMemo(() => {
-    const map = new Map<string, string>()
+  // Lookup of value -> option so chips and items can show friendly labels and
+  // metadata even when the underlying option list changes (e.g. custom-added
+  // values).
+  const optionMap = React.useMemo(() => {
+    const map = new Map<string, Option>()
     for (const option of props.options) {
-      map.set(option.value, option.label)
+      map.set(option.value, option)
     }
     return map
   }, [props.options])
@@ -164,8 +173,22 @@ export function MultiSelect(props: MultiSelectProps) {
     if (canCreate) {
       set.add(trimmedInput)
     }
-    return Array.from(set)
+    return [...set]
   }, [props.options, props.selected, canCreate, trimmedInput])
+
+  // Options may carry an opaque value (for example a binding id), so the query
+  // also matches the visible label and description, not just the value.
+  const filterOption = React.useCallback(
+    (value: string, query: string) => {
+      const needle = query.trim().toLowerCase()
+      if (!needle) return true
+      const option = optionMap.get(value)
+      return [option?.label ?? value, option?.desc ?? '', value].some((text) =>
+        text.toLowerCase().includes(needle)
+      )
+    },
+    [optionMap]
+  )
 
   const addValues = React.useCallback(
     (values: string[]) => {
@@ -256,6 +279,7 @@ export function MultiSelect(props: MultiSelectProps) {
       open={open}
       onOpenChange={setOpen}
       disabled={props.disabled}
+      filter={filterOption}
     >
       <ComboboxChips
         ref={chipsAnchorRef}
@@ -281,7 +305,7 @@ export function MultiSelect(props: MultiSelectProps) {
             return (
               <>
                 {visibleValues.map((value) => {
-                  const label = labelMap.get(value) ?? value
+                  const label = optionMap.get(value)?.label ?? value
                   return (
                     <ComboboxChip key={value}>
                       {props.copyChipOnClick ? (
@@ -355,30 +379,56 @@ export function MultiSelect(props: MultiSelectProps) {
           <ComboboxCollection>
             {(item: string) => {
               const isCreate = canCreate && item === trimmedInput
-              const label = labelMap.get(item) ?? item
+              const option = optionMap.get(item)
+              const hasDetail = !!option?.desc || option?.badge != null
+
+              let content = (
+                <span className='truncate'>{option?.label ?? item}</span>
+              )
+              if (isCreate) {
+                content = (
+                  <>
+                    <HugeiconsIcon
+                      icon={Add01Icon}
+                      strokeWidth={2}
+                      className='text-muted-foreground'
+                      aria-hidden='true'
+                    />
+                    <span className='truncate'>
+                      {props.createLabel
+                        ? t(props.createLabel, { value: item })
+                        : t('Add "{{value}}"', { value: item })}
+                    </span>
+                  </>
+                )
+              } else if (option && hasDetail) {
+                content = (
+                  <>
+                    <span className='min-w-0 flex-1'>
+                      <span className='block truncate font-medium'>
+                        {option.label}
+                      </span>
+                      {option.desc ? (
+                        <span className='text-muted-foreground block truncate text-xs'>
+                          {option.desc}
+                        </span>
+                      ) : null}
+                    </span>
+                    {option.badge}
+                  </>
+                )
+              }
+
               return (
                 <ComboboxItem
                   key={item}
                   value={item}
-                  className={isCreate ? 'text-foreground' : undefined}
-                >
-                  {isCreate ? (
-                    <>
-                      <HugeiconsIcon
-                        icon={Add01Icon}
-                        strokeWidth={2}
-                        className='text-muted-foreground'
-                        aria-hidden='true'
-                      />
-                      <span className='truncate'>
-                        {props.createLabel
-                          ? t(props.createLabel, { value: item })
-                          : t('Add "{{value}}"', { value: item })}
-                      </span>
-                    </>
-                  ) : (
-                    <span className='truncate'>{label}</span>
+                  className={cn(
+                    isCreate && 'text-foreground',
+                    hasDetail && 'items-start py-2'
                   )}
+                >
+                  {content}
                 </ComboboxItem>
               )
             }}

@@ -132,6 +132,7 @@ export interface TokenGroupOption {
   binding_id: number
   value: string
   label: string
+  description: string
   price_version: number
   sale_ratio: string
 }

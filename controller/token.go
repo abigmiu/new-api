@@ -221,6 +221,7 @@ func GetTokenGroups(c *gin.Context) {
 		BindingId    int64  `json:"binding_id"`
 		Value        string `json:"value"`
 		Label        string `json:"label"`
+		Description  string `json:"description"`
 		PriceVersion int64  `json:"price_version"`
 		SaleRatio    string `json:"sale_ratio"`
 	}
@@ -230,6 +231,7 @@ func GetTokenGroups(c *gin.Context) {
 			BindingId:    group.Id,
 			Value:        group.LocalGroup,
 			Label:        group.LocalDisplayName,
+			Description:  group.RemoteDescription,
 			PriceVersion: group.PriceVersion,
 			SaleRatio:    group.SaleRatio,
 		})
