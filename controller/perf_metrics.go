@@ -1,10 +1,12 @@
 package controller
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
 	"strconv"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/setting/ratio_setting"
@@ -104,7 +106,7 @@ func GetChannelPerformance(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": err.Error()})
 		return
 	}
-	response := prepareManagedChannelPerformanceResponse(result, bindings)
+	response := prepareManagedChannelPerformanceResponse(result, bindings, c.GetInt("role") >= common.RoleAdminUser)
 	response.Range = selectedRange
 	c.JSON(http.StatusOK, gin.H{"success": true, "data": response})
 }
@@ -137,7 +139,7 @@ type managedGroupPerformance struct {
 	Series       []perfmetrics.ChannelPerformanceBucket `json:"series"`
 }
 
-func prepareManagedChannelPerformanceResponse(result perfmetrics.ChannelPerformanceResult, bindings []model.UpstreamGroupBinding) managedChannelPerformanceResponse {
+func prepareManagedChannelPerformanceResponse(result perfmetrics.ChannelPerformanceResult, bindings []model.UpstreamGroupBinding, isAdmin bool) managedChannelPerformanceResponse {
 	metricsByChannel := make(map[int]perfmetrics.ChannelPerformance, len(result.Channels))
 	for _, metric := range result.Channels {
 		metricsByChannel[metric.ChannelID] = metric
@@ -183,6 +185,13 @@ func prepareManagedChannelPerformanceResponse(result perfmetrics.ChannelPerforma
 			}
 			return response.Suppliers[i].Groups[a].GroupName < response.Suppliers[i].Groups[b].GroupName
 		})
+	}
+	if !isAdmin {
+		// Upstream supplier names are admin-only. Other users see the same
+		// anonymized channel label that managed key groups are named with.
+		for i := range response.Suppliers {
+			response.Suppliers[i].UpstreamChannelName = fmt.Sprintf("渠道%d", response.Suppliers[i].UpstreamChannelId)
+		}
 	}
 	return response
 }

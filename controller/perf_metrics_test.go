@@ -26,7 +26,7 @@ func TestPrepareManagedChannelPerformanceResponseGroupsEnabledBindingsBySupplier
 		},
 	}
 
-	response := prepareManagedChannelPerformanceResponse(result, bindings)
+	response := prepareManagedChannelPerformanceResponse(result, bindings, true)
 
 	assert.Equal(t, int64(123), response.UpdatedAt)
 	require.Len(t, response.Suppliers, 2)
@@ -47,7 +47,7 @@ func TestPrepareManagedChannelPerformanceResponseKeepsGroupWithoutMetrics(t *tes
 		Id: 1, UpstreamChannelId: 1, UpstreamChannelName: "Supplier", RemoteGroupName: "New Group", LocalChannelId: &localChannelID,
 	}}
 
-	response := prepareManagedChannelPerformanceResponse(perfmetrics.ChannelPerformanceResult{}, bindings)
+	response := prepareManagedChannelPerformanceResponse(perfmetrics.ChannelPerformanceResult{}, bindings, true)
 
 	require.Len(t, response.Suppliers, 1)
 	require.Len(t, response.Suppliers[0].Groups, 1)
@@ -55,4 +55,21 @@ func TestPrepareManagedChannelPerformanceResponseKeepsGroupWithoutMetrics(t *tes
 	assert.Zero(t, group.AttemptCount)
 	assert.Zero(t, group.SuccessRate)
 	assert.Empty(t, group.Series)
+}
+
+func TestPrepareManagedChannelPerformanceResponseHidesSupplierNameFromNonAdmins(t *testing.T) {
+	localChannelID := 17
+	bindings := []model.UpstreamGroupBinding{{
+		Id: 1, UpstreamChannelId: 5, UpstreamChannelName: "Secret Supplier", RemoteGroupName: "Pro", LocalChannelId: &localChannelID,
+	}}
+	result := perfmetrics.ChannelPerformanceResult{
+		Channels: []perfmetrics.ChannelPerformance{{ChannelID: localChannelID, AttemptCount: 4}},
+	}
+
+	response := prepareManagedChannelPerformanceResponse(result, bindings, false)
+
+	require.Len(t, response.Suppliers, 1)
+	assert.Equal(t, "渠道5", response.Suppliers[0].UpstreamChannelName)
+	require.Len(t, response.Suppliers[0].Groups, 1)
+	assert.Equal(t, "Pro", response.Suppliers[0].Groups[0].GroupName)
 }
