@@ -29,6 +29,7 @@ import {
 } from '@/components/data-table'
 import { SectionPageLayout } from '@/components/layout'
 import { StatusBadge } from '@/components/status-badge'
+import { TruncatedText } from '@/components/truncated-text'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { formatTimestampToDate } from '@/lib/format'
@@ -114,8 +115,13 @@ export function UpstreamGroups() {
       {
         id: 'description',
         header: t('Description'),
-        className: 'min-w-64',
-        cell: (group) => group.remote_description || '-',
+        className: 'w-64',
+        cell: (group) => (
+          <TruncatedText
+            text={group.remote_description || '-'}
+            maxWidth='max-w-64'
+          />
+        ),
       },
       {
         id: 'source',
