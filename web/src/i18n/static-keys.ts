@@ -553,6 +553,7 @@ export const STATIC_I18N_KEYS = [
 
   // Channel performance metric columns (labels passed to t at runtime)
   'Supplier',
+  'Multiplier',
   'Success rate',
   'Latency',
   'Average TTFT',

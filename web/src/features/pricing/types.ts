@@ -88,6 +88,14 @@ export type ModelCapability =
   | 'caching'
   | 'embeddings'
 
+/** A managed (upstream binding) group exposed on the model square. */
+export type PricingManagedGroup = {
+  value: string
+  label: string
+  sale_ratio: string
+  price_version: number
+}
+
 export type PricingData = {
   success: boolean
   message?: string
@@ -97,6 +105,7 @@ export type PricingData = {
   usable_group: Record<string, { desc: string; ratio: number }>
   supported_endpoint: Record<string, string>
   auto_groups: string[]
+  managed_groups?: PricingManagedGroup[]
 }
 
 export type TokenUnit = 'M' | 'K'

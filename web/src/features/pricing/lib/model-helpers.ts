@@ -24,7 +24,11 @@ import type { PricingModel } from '../types'
 // ----------------------------------------------------------------------------
 
 /**
- * Get available groups for a model
+ * Get available groups for a model.
+ *
+ * The pricing catalogue lists every group a model can be billed under, so the
+ * candidates are the groups the viewer can use (usable_group) plus every group
+ * that carries a ratio (group_ratio, which includes managed groups).
  */
 export function getAvailableGroups(
   model: PricingModel,
@@ -33,8 +37,12 @@ export function getAvailableGroups(
   const modelEnableGroups = Array.isArray(model.enable_groups)
     ? model.enable_groups
     : []
+  const knownGroups = new Set([
+    ...Object.keys(model.group_ratio || {}),
+    ...Object.keys(usableGroup),
+  ])
 
-  return Object.keys(usableGroup)
+  return [...knownGroups]
     .filter((g) => !EXCLUDED_GROUPS.includes(g))
     .filter((g) => modelEnableGroups.includes(g))
 }

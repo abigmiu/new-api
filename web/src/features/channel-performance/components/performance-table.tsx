@@ -46,7 +46,7 @@ type MetricColumn = {
 const METRIC_COLUMNS: MetricColumn[] = [
   {
     key: 'sale_ratio',
-    label: 'Price',
+    label: 'Multiplier',
     cell: (group) => group.sale_ratio || '—',
   },
   {

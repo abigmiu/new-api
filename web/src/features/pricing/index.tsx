@@ -47,6 +47,7 @@ export function Pricing() {
     vendors,
     groupRatio,
     usableGroup,
+    managedGroups,
     endpointMap,
     autoGroups,
     isLoading,
@@ -97,12 +98,18 @@ export function Pricing() {
     [models, selectedModelName]
   )
 
+  // The catalogue lists every group with a ratio, including managed groups
+  // that the viewer may not be able to call. Availability is annotated via
+  // usable_group instead of hiding the group.
   const availableGroups = useMemo(
     () =>
-      Object.keys(usableGroup || {}).filter(
-        (g) => !EXCLUDED_GROUPS.includes(g)
-      ),
-    [usableGroup]
+      [
+        ...new Set([
+          ...Object.keys(groupRatio || {}),
+          ...Object.keys(usableGroup || {}),
+        ]),
+      ].filter((g) => !EXCLUDED_GROUPS.includes(g)),
+    [groupRatio, usableGroup]
   )
 
   const handleClearAll = useCallback(() => {
@@ -217,6 +224,7 @@ export function Pricing() {
               vendors={vendors || []}
               groups={availableGroups}
               groupRatios={groupRatio}
+              managedGroups={managedGroups}
               tags={availableTags}
               models={models || []}
               hasActiveFilters={hasActiveFilters}
@@ -249,6 +257,7 @@ export function Pricing() {
                 vendors={vendors || []}
                 groups={availableGroups}
                 groupRatios={groupRatio}
+                managedGroups={managedGroups}
                 tags={availableTags}
                 models={models || []}
                 hasActiveFilters={hasActiveFilters}
