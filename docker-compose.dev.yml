@@ -31,6 +31,10 @@ services:
       - REDIS_CONN_STRING=redis://redis
       - TZ=Asia/Shanghai
       - BATCH_UPDATE_ENABLED=true
+      - CHANNEL_ALIAS_KEY=${CHANNEL_ALIAS_KEY:?CHANNEL_ALIAS_KEY is required}
+      - UPSTREAM_OPS_BASE_URL=${UPSTREAM_OPS_BASE_URL:-}
+      - UPSTREAM_OPS_TOKEN=${UPSTREAM_OPS_TOKEN:-}
+      - UPSTREAM_GROUP_FEISHU_WEBHOOK=${UPSTREAM_GROUP_FEISHU_WEBHOOK:-}
       # Local HTTP dev mode: keep Secure=false and leave TRUSTED_URL unset. This disables the refresh/logout OriginGuard so the :5173 -> :3000 dev proxy works.
       - SESSION_COOKIE_SECURE=false
       # For HTTPS only: set Secure=true and list every exact trusted HTTPS browser Origin. This does not configure relay CORS.
