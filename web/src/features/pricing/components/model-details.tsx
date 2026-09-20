@@ -67,7 +67,11 @@ import {
   isDynamicPricingModel,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { getAvailableGroups, isTokenBasedModel } from '../lib/model-helpers'
+import {
+  getAvailableGroups,
+  getGroupLabel,
+  isTokenBasedModel,
+} from '../lib/model-helpers'
 import { formatFixedPrice, formatGroupPrice } from '../lib/price'
 import type {
   ModelCapability,
@@ -468,7 +472,9 @@ function ModelBackendProviderSection(props: { model: PricingModel }) {
   if (groups.length > 0) {
     cells.push(
       <CatalogInfoCell key='groups' label={t('Groups')}>
-        <CatalogPillList items={groups} />
+        <CatalogPillList
+          items={groups.map((group) => getGroupLabel(model, group))}
+        />
       </CatalogInfoCell>
     )
   }
@@ -801,7 +807,11 @@ function AutoGroupChain(props: { model: PricingModel; autoGroups: string[] }) {
       <span className='text-muted-foreground/40'>→</span>
       {autoChain.map((g, idx) => (
         <span key={g} className='flex items-center gap-1'>
-          <GroupBadge group={g} size='sm' />
+          <GroupBadge
+            group={g}
+            label={getGroupLabel(props.model, g)}
+            size='sm'
+          />
           {idx < autoChain.length - 1 && (
             <span className='text-muted-foreground/40'>→</span>
           )}
@@ -977,7 +987,11 @@ function GroupPricingSection(props: {
             return (
               <div key={group} className='overflow-hidden rounded-lg border'>
                 <div className='bg-muted/20 flex items-center justify-between gap-3 border-b px-3 py-2'>
-                  <GroupBadge group={group} size='sm' />
+                  <GroupBadge
+                    group={group}
+                    label={getGroupLabel(props.model, group)}
+                    size='sm'
+                  />
                   <span className='text-muted-foreground font-mono text-xs'>
                     {ratio}x
                   </span>
@@ -1058,7 +1072,13 @@ function GroupPricingSection(props: {
             header: t('Group'),
             className: thClass,
             cellClassName: 'py-2.5',
-            cell: (group) => <GroupBadge group={group} size='sm' />,
+            cell: (group) => (
+              <GroupBadge
+                group={group}
+                label={getGroupLabel(props.model, group)}
+                size='sm'
+              />
+            ),
           },
           {
             id: 'ratio',

@@ -42,6 +42,16 @@ export function usePricingData() {
     [status?.usd_exchange_rate, priceRate]
   )
 
+  // Managed groups carry an opaque key (uo-*) plus a readable label; expose the
+  // label lookup both catalogue-wide (filters) and per model (badges).
+  const groupLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        (data?.managed_groups ?? []).map((group) => [group.value, group.label])
+      ),
+    [data]
+  )
+
   const models = useMemo(() => {
     if (!data?.data || !data?.vendors) return []
 
@@ -58,16 +68,17 @@ export function usePricingData() {
         vendor_icon: vendor?.icon,
         vendor_description: vendor?.description,
         group_ratio: data.group_ratio,
+        group_labels: groupLabels,
       }
     })
-  }, [data])
+  }, [data, groupLabels])
 
   return {
     models,
     vendors: data?.vendors ?? [],
     groupRatio: data?.group_ratio ?? {},
     usableGroup: data?.usable_group ?? {},
-    managedGroups: data?.managed_groups ?? [],
+    groupLabels,
     endpointMap: data?.supported_endpoint ?? {},
     autoGroups: data?.auto_groups ?? [],
     isLoading,

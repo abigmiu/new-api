@@ -48,6 +48,16 @@ export function getAvailableGroups(
 }
 
 /**
+ * Display name for a group on a model, falling back to the raw group key.
+ *
+ * Managed groups (uo-*) have opaque keys, so the catalogue ships a readable
+ * label per group; plain groups have no label and keep their key.
+ */
+export function getGroupLabel(model: PricingModel, group: string): string {
+  return model.group_labels?.[group] || group
+}
+
+/**
  * Read a configured group ratio while preserving valid zero ratios.
  */
 export function getConfiguredGroupRatio(

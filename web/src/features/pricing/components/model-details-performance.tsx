@@ -37,6 +37,7 @@ import type { PerformanceGroup } from '@/features/performance-metrics/types'
 import { cn } from '@/lib/utils'
 
 import { type UptimeDayPoint } from '../lib/mock-stats'
+import { getGroupLabel } from '../lib/model-helpers'
 import type { PricingModel } from '../types'
 import { LatencyTrendChart, UptimeTrendChart } from './model-details-charts'
 import { UptimeSparkline } from './model-details-uptime-sparkline'
@@ -266,7 +267,13 @@ export function ModelDetailsPerformance(props: { model: PricingModel }) {
               header: t('Group'),
               className: tableStyles.compactHeaderCell,
               cellClassName: tableStyles.compactCell,
-              cell: (perf) => <GroupBadge group={perf.group} size='sm' />,
+              cell: (perf) => (
+                <GroupBadge
+                  group={perf.group}
+                  label={getGroupLabel(props.model, perf.group)}
+                  size='sm'
+                />
+              ),
             },
             {
               id: 'tps',

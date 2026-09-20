@@ -47,7 +47,7 @@ export function Pricing() {
     vendors,
     groupRatio,
     usableGroup,
-    managedGroups,
+    groupLabels,
     endpointMap,
     autoGroups,
     isLoading,
@@ -224,7 +224,7 @@ export function Pricing() {
               vendors={vendors || []}
               groups={availableGroups}
               groupRatios={groupRatio}
-              managedGroups={managedGroups}
+              groupLabels={groupLabels}
               tags={availableTags}
               models={models || []}
               hasActiveFilters={hasActiveFilters}
@@ -257,7 +257,7 @@ export function Pricing() {
                 vendors={vendors || []}
                 groups={availableGroups}
                 groupRatios={groupRatio}
-                managedGroups={managedGroups}
+                groupLabels={groupLabels}
                 tags={availableTags}
                 models={models || []}
                 hasActiveFilters={hasActiveFilters}

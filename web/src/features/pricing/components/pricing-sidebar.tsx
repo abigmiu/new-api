@@ -38,7 +38,7 @@ import {
   getQuotaTypeLabels,
 } from '../constants'
 import { parseTags } from '../lib/filters'
-import type { PricingManagedGroup, PricingModel, PricingVendor } from '../types'
+import type { PricingModel, PricingVendor } from '../types'
 
 type FilterOption = {
   value: string
@@ -69,7 +69,7 @@ export interface PricingSidebarProps {
   vendors: PricingVendor[]
   groups: string[]
   groupRatios?: Record<string, number>
-  managedGroups?: PricingManagedGroup[]
+  groupLabels?: Record<string, string>
   tags: string[]
   models: PricingModel[]
   hasActiveFilters: boolean
@@ -181,10 +181,6 @@ export function PricingSidebar(props: PricingSidebarProps) {
       .filter((vendor) => vendor.count > 0),
   ]
 
-  const managedGroupLabels = new Map(
-    (props.managedGroups ?? []).map((group) => [group.value, group.label])
-  )
-
   const groupOptions: FilterOption[] = [
     {
       value: FILTER_ALL,
@@ -192,7 +188,7 @@ export function PricingSidebar(props: PricingSidebarProps) {
     },
     ...props.groups.map((group) => ({
       value: group,
-      label: managedGroupLabels.get(group) || group,
+      label: props.groupLabels?.[group] || group,
       suffix: formatGroupRatio(props.groupRatios?.[group]),
     })),
   ]

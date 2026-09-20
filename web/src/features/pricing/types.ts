@@ -50,6 +50,8 @@ export type PricingModel = {
   supported_endpoint_types?: string[]
   key?: string
   group_ratio?: Record<string, number>
+  /** Display name per group key, so managed groups (uo-*) show a readable name */
+  group_labels?: Record<string, string>
   /** Billing mode (e.g. "tiered_expr") used to flag dynamic pricing */
   billing_mode?: string
   /** Raw expression describing dynamic / tiered billing */

@@ -34,7 +34,7 @@ import {
   getDynamicPricingSummary,
 } from '../lib/dynamic-price'
 import { parseTags } from '../lib/filters'
-import { isTokenBasedModel } from '../lib/model-helpers'
+import { getGroupLabel, isTokenBasedModel } from '../lib/model-helpers'
 import {
   formatPrice,
   formatRequestPrice,
@@ -400,7 +400,12 @@ export function usePricingColumns(
         return (
           <BadgeListCell
             items={groups.map((group) => (
-              <GroupBadge key={group} group={group} size='sm' />
+              <GroupBadge
+                key={group}
+                group={group}
+                label={getGroupLabel(row.original, group)}
+                size='sm'
+              />
             ))}
             tooltipClassName='max-w-[280px] p-2'
           />
