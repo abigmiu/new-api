@@ -62,7 +62,7 @@ UpstreamOps v0.0.9 可使用以下 API：
 已确认约束：
 
 - v0.0.9 已删除旧的 `/api/upstream-sync`，上述接口仍可用；
-- `GET /rates` 只返回已保存快照，每轮应先 refresh，成功后再读取 rates；
+- `GET /rates` 只返回 UpstreamOps 已保存的倍率快照；同步每轮直接读取该快照，**不再触发 refresh**（倍率刷新节奏由 UpstreamOps 自己的 `rateCron` 掌控）；
 - NewAPI 类型供应商用分组名标识，没有远端分组 ID；
 - Sub2API 类型供应商提供 `remote_group_id`；
 - Key 列表可能包含掩码或完整 Key，原始响应不得写日志、事件或通知。
@@ -414,10 +414,8 @@ sequenceDiagram
 
     T->>U: GET /api/channels
     par monitor_enabled 供应商，有限并发
-        T->>U: POST /channels/:id/refresh-rates
-        U-->>T: refresh result
         T->>U: GET /channels/:id/rates
-        U-->>T: fresh rates
+        U-->>T: cached rates（由 UpstreamOps 定时刷新）
     end
     T->>D: 更新当前价格和 price_version
     T->>C: 原子发布全局快照
@@ -430,11 +428,11 @@ sequenceDiagram
 2. 每轮一个 30 秒 `context.WithTimeout`，覆盖 HTTP 与数据库应用。
 3. HTTP Transport 的连接、TLS、响应头读取也受超时控制。
 4. 刷新全部 `monitor_enabled` 供应商，持续发现新分组。
-5. 供应商间最大并发建议为 4；同一供应商严格先 refresh 后 rates。
-6. refresh 失败时不读旧 rates 做价格判断。
-7. 单供应商失败不阻断其他供应商。
+5. 供应商间最大并发建议为 4；每轮只读取 `GET /rates` 返回的已保存快照。
+6. 不在同步中触发 refresh：倍率刷新节奏由 UpstreamOps 自己的 `rateCron` 掌控，避免每 60 秒对上游站做冗余的实时登录扫描（该扫描一旦偶发超时即返回 `ok:false`，会让失败/恢复通知反复横跳）。
+7. 单供应商读取失败不阻断其他供应商。
 8. 初次发现只创建 `discovered`，不自动建 Key 或渠道。
-9. 只有成功刷新后的完整快照才能判断价格变化和分组消失。
+9. 只有成功读取到完整快照才能判断价格变化和分组消失。
 10. 同轮通知按供应商合并。
 
 同步失败保留上一次价格版本和全局状态，不把网络错误当成价格变化。
@@ -616,8 +614,8 @@ Redis 不可用时数据库仍是真相；同步节点立即更新本机快照�
 | --- | --- |
 | UpstreamOps 配置缺失 | 不启动同步，不改变已有状态 |
 | 飞书配置缺失 | 同步和版本更新正常，通知标记未配置 |
-| 30 秒超时 | 未成功刷新的供应商不判断价格或消失 |
-| refresh `{ok:false}` | 不读取旧倍率做判断 |
+| 30 秒超时 | 未成功读取快照的供应商不判断价格或消失 |
+| 快照读取失败 | 不基于缺失数据判断价格变化或分组消失 |
 | 非法倍率 | 不发布新版本，记录错误并通知管理员 |
 | 价格变化 | 更新全局价格和版本；旧版本 Key 内该分组失效；渠道保持启用 |
 | 用户接受价格 | 只更新该 Key 的目标关联 |

@@ -72,10 +72,12 @@ func RunUpstreamGroupSync(parent context.Context) (UpstreamGroupSyncSummary, err
 				results <- upstreamGroupChannelSnapshot{Channel: channel, Err: ctx.Err()}
 				return
 			}
-			if refreshErr := client.RefreshRates(ctx, channel.Id); refreshErr != nil {
-				results <- upstreamGroupChannelSnapshot{Channel: channel, Err: refreshErr}
-				return
-			}
+			// 只读 UpstreamOps 已保存的倍率快照，不再每轮触发实时刷新。
+			// UpstreamOps 自己按 rateCron（默认每 30 分钟）ScanAllRates 全量扫描并落库，
+			// 而本同步每 60 秒就跑一次：若每轮再 POST refresh-rates，只会让 UpstreamOps
+			// 对上游站做冗余的实时登录扫描；任一上游站偶发超时即返回 ok=false，导致
+			// "synchronization failed / recovered" 在飞书反复横跳。刷新节奏归 UpstreamOps
+			// 自己掌控，这里只消费其快照。
 			rates, listErr := client.ListRates(ctx, channel.Id)
 			results <- upstreamGroupChannelSnapshot{Channel: channel, Rates: rates, Err: listErr}
 		}(channel)
