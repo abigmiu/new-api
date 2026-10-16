@@ -17,12 +17,13 @@ import (
 )
 
 type UpstreamGroupSyncSummary struct {
-	Channels     int `json:"channels"`
-	Groups       int `json:"groups"`
-	Discovered   int `json:"discovered"`
-	PriceChanged int `json:"price_changed"`
-	Removed      int `json:"removed"`
-	Failed       int `json:"failed"`
+	Channels        int `json:"channels"`
+	Groups          int `json:"groups"`
+	Discovered      int `json:"discovered"`
+	PriceChanged    int `json:"price_changed"`
+	Removed         int `json:"removed"`
+	ModelsRefreshed int `json:"models_refreshed"`
+	Failed          int `json:"failed"`
 }
 
 type upstreamGroupChannelSnapshot struct {
@@ -178,6 +179,14 @@ func RunUpstreamGroupSync(parent context.Context) (UpstreamGroupSyncSummary, err
 	}
 	if len(notices) > 0 {
 		SendUpstreamGroupNotice(ctx, notices)
+	}
+	// Model lists are refreshed last, on the caller's context: the rate listing
+	// above runs under a short deadline that a slow upstream model request must
+	// not be able to starve.
+	refreshed, modelNotices := syncManagedChannelModels(parent)
+	summary.ModelsRefreshed = refreshed
+	if len(modelNotices) > 0 {
+		SendUpstreamGroupNotice(parent, modelNotices)
 	}
 	return summary, nil
 }
