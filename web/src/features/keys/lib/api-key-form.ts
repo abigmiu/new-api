@@ -44,7 +44,7 @@ export function getApiKeyFormSchema(
       unlimited_quota: z.boolean(),
       model_limits: z.array(z.string()),
       allow_ips: z.string().optional(),
-      group: z.string().min(1, t('Please select a group')),
+      group: z.string(),
       routing_mode: z.enum(['single', 'managed']),
       groups: z.array(z.number()),
       auto_groups_mode: z.enum(['inherit', 'custom']),
@@ -70,6 +70,13 @@ export function getApiKeyFormSchema(
             }),
           })
         }
+      }
+      if (data.routing_mode === 'single' && data.group.length === 0) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['group'],
+          message: t('Please select a group'),
+        })
       }
       if (data.routing_mode === 'single' && data.group === 'auto') {
         if (

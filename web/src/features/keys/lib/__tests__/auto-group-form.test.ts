@@ -161,6 +161,33 @@ describe('API key Auto group form mapping', () => {
     assert.equal(transformFormDataToPayload(nonAuto).cross_group_retry, false)
   })
 
+  test('accepts a managed token with an empty single-group value', () => {
+    const managed = {
+      ...getApiKeyFormDefaultValues(false),
+      routing_mode: 'managed' as const,
+      name: 'managed token',
+      groups: [1],
+    }
+    assert.equal(managed.group, '')
+
+    const result = getApiKeyFormSchema(t).safeParse(managed)
+    assert.equal(result.success, true)
+    assert.equal(transformFormDataToPayload(managed).group, '')
+  })
+
+  test('rejects a single-group token without a group', () => {
+    const result = getApiKeyFormSchema(t).safeParse({
+      ...getApiKeyFormDefaultValues(false),
+      routing_mode: 'single',
+      name: 'single token',
+    })
+
+    assert.equal(result.success, false)
+    if (result.success) return
+    assert.deepEqual(result.error.issues[0]?.path, ['group'])
+    assert.equal(result.error.issues[0]?.message, 'Please select a group')
+  })
+
   test('rejects snapshots over the configured limit', () => {
     const result = getApiKeyFormSchema(t, 1).safeParse({
       ...getApiKeyFormDefaultValues(true),
