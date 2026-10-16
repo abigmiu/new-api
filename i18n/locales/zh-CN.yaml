@@ -284,3 +284,11 @@ custom_oauth.name_empty: "提供商名称不能为空"
 custom_oauth.has_bindings: "无法删除已有用户绑定的提供商"
 custom_oauth.binding_not_found: "OAuth 绑定不存在"
 custom_oauth.provider_id_field_invalid: "无法从提供商响应中提取用户 ID"
+
+# 托管分组消息。刻意不做插值：令牌持有者不应知道运营方使用了哪个渠道。
+token_group.price_changed: "渠道价格变化，请重新启用"
+token_group.channel_removed: "该渠道已被移除"
+token_group.unavailable: "该渠道当前不可用，请联系管理员"
+token_group.limit_exceeded: "一个令牌只能绑定一个托管分组"
+token_group.channel_not_allowed: "托管分组令牌不支持指定渠道"
+token_group.requires_binding: "托管分组必须通过令牌分组授权访问"

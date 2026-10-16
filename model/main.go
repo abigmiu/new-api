@@ -28,7 +28,6 @@ var logKeyCol string
 var logGroupCol string
 
 func initCol() {
-	// init common column names
 	if common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
 		commonGroupCol = `"group"`
 		commonKeyCol = `"key"`
@@ -207,6 +206,13 @@ func InitDB() (err error) {
 		common.FatalLog(err)
 	}
 	return err
+}
+
+// ReloadCommonColumns re-derives the dialect-quoted column names after the
+// test (or a config reload) switches the active database type. Production calls
+// it through InitDB/InitLogDB.
+func ReloadCommonColumns() {
+	initCol()
 }
 
 func InitLogDB() (err error) {

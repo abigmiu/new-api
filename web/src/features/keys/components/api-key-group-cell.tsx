@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/tooltip'
 
 import type { ApiKey } from '../types'
+import { managedGroupStatus } from '../lib/managed-group-status'
 import {
   // AutoGroupBadge,
   GroupRatioBadge,
@@ -46,6 +47,22 @@ export function ApiKeyGroupCell(props: ApiKeyGroupCellProps) {
   const { t } = useTranslation()
 
   if (props.groups && props.groups.length > 0) {
+    // A key binds one managed channel, so a single badge describing that
+    // binding is clearer than an "N / M active" count.
+    const single = props.groups.length === 1 ? props.groups[0] : undefined
+    if (single) {
+      const status = managedGroupStatus(single)
+      return (
+        <div className='flex min-w-0 flex-wrap items-center gap-1.5'>
+          <StatusBadge
+            label={t(status.label)}
+            variant={status.variant}
+            copyable={false}
+          />
+        </div>
+      )
+    }
+
     const activeCount = props.groups.filter(
       (group) => group.effective_enabled
     ).length

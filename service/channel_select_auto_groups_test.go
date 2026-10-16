@@ -128,21 +128,18 @@ func TestCacheGetRandomSatisfiedChannelUsesTokenAutoGroupsWhenGlobalAutoIsEmpty(
 	assert.Equal(t, "default", common.GetContextKeyString(ctx, constant.ContextKeyAutoGroup))
 }
 
-func TestCacheGetRandomSatisfiedChannelSkipsOnlyPriceChangedTokenGroup(t *testing.T) {
+func TestCacheGetRandomSatisfiedChannelRoutesSingleManagedGroup(t *testing.T) {
 	db := setupChannelSelectAutoGroupsTest(t)
 	const modelName = "managed-groups-runtime-model"
 	createChannelSelectAutoGroupsChannel(t, db, 2201, "uo-a", modelName)
 	createChannelSelectAutoGroupsChannel(t, db, 2202, "uo-b", modelName)
 	createChannelSelectAutoGroupsChannel(t, db, 2203, "uo-c", modelName)
-	createChannelSelectAutoGroupsChannel(t, db, 2204, "uo-d", modelName)
 	model.InitChannelCache()
 
 	gin.SetMode(gin.TestMode)
 	ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
 	common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []model.TokenGroupBindingView{
-		{BindingId: 1, LocalGroup: "uo-a", EffectiveEnabled: false, State: "price_changed", AcceptedSaleRatio: "0.089"},
 		{BindingId: 2, LocalGroup: "uo-b", EffectiveEnabled: true, State: "active", AcceptedSourceRatio: "0.100", AcceptedSaleRatio: "0.118", AcceptedPriceVersion: 1},
-		{BindingId: 3, LocalGroup: "uo-c", EffectiveEnabled: true, State: "active", AcceptedSaleRatio: "0.236", AcceptedPriceVersion: 1},
 	})
 	retry := 0
 	param := &RetryParam{Ctx: ctx, ModelName: modelName, RequestPath: "/v1/chat/completions", Retry: &retry}
@@ -157,14 +154,59 @@ func TestCacheGetRandomSatisfiedChannelSkipsOnlyPriceChangedTokenGroup(t *testin
 	require.True(t, ok)
 	assert.Equal(t, int64(2), bindingId)
 	assert.Equal(t, "0.100", common.GetContextKeyString(ctx, constant.ContextKeyTokenGroupSourceRatio))
+}
 
-	param.IncreaseRetry()
-	second, selectedGroup, err := CacheGetRandomSatisfiedChannel(param)
-	require.NoError(t, err)
-	require.NotNil(t, second)
-	assert.Equal(t, 2203, second.Id)
-	assert.Equal(t, "uo-c", selectedGroup)
-	assert.NotEqual(t, 2204, second.Id)
+func TestCacheGetRandomSatisfiedChannelRejectsManagedGroupThatCannotRoute(t *testing.T) {
+	db := setupChannelSelectAutoGroupsTest(t)
+	const modelName = "managed-groups-runtime-model"
+	createChannelSelectAutoGroupsChannel(t, db, 2202, "uo-b", modelName)
+	createChannelSelectAutoGroupsChannel(t, db, 2203, "uo-c", modelName)
+	model.InitChannelCache()
+
+	tests := []struct {
+		name     string
+		view     model.TokenGroupBindingView
+		decision TokenGroupRoutingDecision
+	}{
+		{
+			name:     "price changed",
+			view:     model.TokenGroupBindingView{LocalGroup: "uo-b", EffectiveEnabled: false, State: "price_changed", AcceptedSaleRatio: "0.089"},
+			decision: TokenGroupRoutingPriceChanged,
+		},
+		{
+			name:     "channel removed",
+			view:     model.TokenGroupBindingView{LocalGroup: "uo-b", EffectiveEnabled: false, State: "group_unavailable", GlobalState: model.UpstreamGroupStateGroupRemoved},
+			decision: TokenGroupRoutingChannelRemoved,
+		},
+		{
+			name:     "unavailable without a reason",
+			view:     model.TokenGroupBindingView{LocalGroup: "uo-b", EffectiveEnabled: false, State: "group_unavailable", GlobalState: model.UpstreamGroupStateAdminDisabled},
+			decision: TokenGroupRoutingUnavailable,
+		},
+		{
+			// A leftover multi-binding token routes nowhere: picking one of its
+			// channels would bill the user against a group they may not know of.
+			name:     "legacy multi binding",
+			view:     model.TokenGroupBindingView{LocalGroup: "uo-c", EffectiveEnabled: false, State: model.TokenGroupStateMultipleBindings},
+			decision: TokenGroupRoutingUnavailable,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			gin.SetMode(gin.TestMode)
+			ctx, _ := gin.CreateTestContext(httptest.NewRecorder())
+			common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []model.TokenGroupBindingView{test.view})
+			retry := 0
+
+			channel, _, err := CacheGetRandomSatisfiedChannel(&RetryParam{Ctx: ctx, ModelName: modelName, RequestPath: "/v1/chat/completions", Retry: &retry})
+
+			assert.Nil(t, channel)
+			var routingErr *TokenGroupUnavailableError
+			require.ErrorAs(t, err, &routingErr)
+			assert.Equal(t, test.decision, routingErr.Decision)
+		})
+	}
 }
 
 func TestCacheGetRandomSatisfiedChannelKeepsCurrentPriceGroupAvailableForOtherToken(t *testing.T) {

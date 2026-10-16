@@ -244,7 +244,7 @@ export function ApiKeysMutateDrawer({
     Number.isInteger(managedGroupsData?.data?.max_count) &&
     Number(managedGroupsData?.data?.max_count) > 0
       ? Number(managedGroupsData?.data?.max_count)
-      : 20
+      : 1
   const schema = useMemo(
     () => getApiKeyFormSchema(t, maxAutoGroups, maxManagedGroups),
     [t, maxAutoGroups, maxManagedGroups]
@@ -281,7 +281,8 @@ export function ApiKeysMutateDrawer({
           transformApiKeyToFormDefaults(
             apiKeyData.data,
             availableAutoGroupNames,
-            maxAutoGroups
+            maxAutoGroups,
+            maxManagedGroups
           )
         )
         setInitializedTarget(target)
@@ -311,6 +312,7 @@ export function ApiKeysMutateDrawer({
     apiKeyFetching,
     availableAutoGroupNames,
     maxAutoGroups,
+    maxManagedGroups,
     initializedTarget,
   ])
 
@@ -527,6 +529,7 @@ export function ApiKeysMutateDrawer({
                           }
                           placeholder={t('Select managed groups')}
                           maxVisibleChips={4}
+                          maxSelected={maxManagedGroups}
                         />
                       </FormControl>
                       <FormDescription>
@@ -535,6 +538,13 @@ export function ApiKeysMutateDrawer({
                           max: maxManagedGroups,
                         })}
                       </FormDescription>
+                      {isUpdate && (apiKeyData?.data?.groups?.length ?? 0) > 1 && (
+                        <p className='text-muted-foreground text-xs'>
+                          {t(
+                            'This key was bound to multiple channels; only the first is kept'
+                          )}
+                        </p>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}

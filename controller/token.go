@@ -373,7 +373,7 @@ func AddToken(c *gin.Context) {
 		return
 	}
 	if len(request.Groups.GroupIds) > model.MaxTokenManagedGroups {
-		common.ApiError(c, fmt.Errorf("token groups must not exceed %d", model.MaxTokenManagedGroups))
+		common.ApiErrorI18n(c, i18n.MsgTokenGroupLimitExceeded)
 		return
 	}
 	if request.Groups.Set && len(request.Groups.GroupIds) > 0 {
@@ -491,7 +491,7 @@ func UpdateToken(c *gin.Context) {
 			return
 		}
 		if len(request.Groups.GroupIds) > model.MaxTokenManagedGroups {
-			common.ApiError(c, fmt.Errorf("token groups must not exceed %d", model.MaxTokenManagedGroups))
+			common.ApiErrorI18n(c, i18n.MsgTokenGroupLimitExceeded)
 			return
 		}
 		// If you add more fields, please also update token.Update()

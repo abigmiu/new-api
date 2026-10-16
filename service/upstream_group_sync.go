@@ -105,12 +105,12 @@ func RunUpstreamGroupSync(parent context.Context) (UpstreamGroupSyncSummary, err
 				summary.Failed++
 				continue
 			}
-			sale, priceErr := CalculateUpstreamGroupSaleRatio(source.String())
+			identity, localGroup := upstreamGroupIdentity(channel, rate)
+			sale, priceErr := CalculateUpstreamGroupSaleRatio(source.String(), identity)
 			if priceErr != nil {
 				summary.Failed++
 				continue
 			}
-			identity, localGroup := upstreamGroupIdentity(channel, rate)
 			seen = append(seen, identity)
 			before, _ := model.GetUpstreamGroupBindingByIdentity(identity)
 			binding, created, changed, applyErr := model.ApplyUpstreamGroupObservation(model.UpstreamGroupObservation{
@@ -154,7 +154,10 @@ func RunUpstreamGroupSync(parent context.Context) (UpstreamGroupSyncSummary, err
 				))
 			}
 		}
-		missing, markErr := model.MarkMissingUpstreamGroups(channel.Id, seen)
+		// A successful listing only proves a group was removed when it actually
+		// enumerated the channel's groups; an empty snapshot is treated as
+		// incomplete so a hiccup cannot retire every group of the channel.
+		missing, markErr := model.MarkMissingUpstreamGroups(channel.Id, seen, len(seen) > 0)
 		if markErr != nil {
 			summary.Failed++
 			continue

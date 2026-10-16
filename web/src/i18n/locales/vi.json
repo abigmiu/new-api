@@ -5356,6 +5356,12 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Select one managed channel": "Chỉ chọn một kênh được quản lý",
+    "Channel removed": "Kênh đã bị xóa",
+    "This key was bound to multiple channels; only the first is kept": "Khóa này từng liên kết nhiều kênh; chỉ kênh đầu tiên được giữ lại",
+    "The channel price has changed, please re-enable": "Giá kênh đã thay đổi, vui lòng bật lại",
+    "This channel has been removed": "Kênh này đã bị xóa",
+    "This channel is currently unavailable, please contact the administrator": "Kênh này hiện không khả dụng, vui lòng liên hệ quản trị viên"
   }
 }

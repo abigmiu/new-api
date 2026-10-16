@@ -31,7 +31,7 @@ import type { ApiKey, ApiKeyFormData } from '../types'
 export function getApiKeyFormSchema(
   t: TFunction,
   maxAutoGroups = 5,
-  maxManagedGroups = 20
+  maxManagedGroups = 1
 ) {
   const autoGroupLimit =
     Number.isInteger(maxAutoGroups) && maxAutoGroups > 0 ? maxAutoGroups : 5
@@ -65,9 +65,12 @@ export function getApiKeyFormSchema(
           ctx.addIssue({
             code: 'custom',
             path: ['groups'],
-            message: t('Select at most {{max}} managed groups', {
-              max: maxManagedGroups,
-            }),
+            message:
+              maxManagedGroups === 1
+                ? t('Select one managed channel')
+                : t('Select at most {{max}} managed groups', {
+                    max: maxManagedGroups,
+                  }),
           })
         }
       }
@@ -203,11 +206,16 @@ export function transformFormDataToPayload(
 
 /**
  * Transform API key data to form defaults
+ *
+ * A key saved by an older build could carry several managed groups; only the
+ * first one is kept so the operator explicitly re-saves a single binding
+ * instead of having the backend silently drop the extras.
  */
 export function transformApiKeyToFormDefaults(
   apiKey: ApiKey,
   availableAutoGroups: string[] = [],
-  maxAutoGroups = 5
+  maxAutoGroups = 5,
+  maxManagedGroups = 1
 ): ApiKeyFormValues {
   const availableSet = new Set(availableAutoGroups)
   const storedAutoGroups = apiKey.auto_groups ?? []
@@ -215,6 +223,10 @@ export function transformApiKeyToFormDefaults(
     .filter((group) => availableSet.has(group))
     .slice(0, Math.max(0, maxAutoGroups))
   const autoGroupsMode = storedAutoGroups.length > 0 ? 'custom' : 'inherit'
+  const managedGroupLimit =
+    Number.isInteger(maxManagedGroups) && maxManagedGroups > 0
+      ? maxManagedGroups
+      : 1
 
   return {
     name: apiKey.name,
@@ -235,7 +247,8 @@ export function transformApiKeyToFormDefaults(
       apiKey.groups && apiKey.groups.length > 0 ? 'managed' : 'single',
     groups: (apiKey.groups || [])
       .sort((a, b) => a.position - b.position)
-      .map((group) => group.binding_id),
+      .map((group) => group.binding_id)
+      .slice(0, managedGroupLimit),
     auto_groups_mode: autoGroupsMode,
     auto_groups: autoGroups,
     cross_group_retry: !!apiKey.cross_group_retry,

@@ -16,7 +16,7 @@ func setupUpstreamGroupTestDB(t *testing.T) {
 	originalDB := DB
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&Token{}, &UpstreamGroupBinding{}, &TokenGroupBinding{}, &UpstreamGroupEvent{}))
+	require.NoError(t, db.AutoMigrate(&Token{}, &UpstreamGroupBinding{}, &TokenGroupBinding{}, &UpstreamGroupEvent{}, &Channel{}, &Ability{}))
 	DB = db
 	t.Cleanup(func() { DB = originalDB })
 }
@@ -184,17 +184,14 @@ func TestReplaceTokenGroupBindingsPreservesAcceptedPriceAndEnabledState(t *testi
 	}
 	require.NoError(t, DB.Create(&relation).Error)
 
-	require.NoError(t, ReplaceTokenGroupBindings(DB, token.Id, []int64{groups[1].Id, groups[0].Id}))
+	require.NoError(t, ReplaceTokenGroupBindings(DB, token.Id, []int64{groups[1].Id}))
 
 	var relations []TokenGroupBinding
 	require.NoError(t, DB.Where("token_id = ?", token.Id).Order("position ASC").Find(&relations).Error)
-	require.Len(t, relations, 2)
+	require.Len(t, relations, 1)
 	assert.Equal(t, groups[1].Id, relations[0].BindingId)
 	assert.Equal(t, int64(1), relations[0].AcceptedPriceVersion)
-	assert.Equal(t, groups[0].Id, relations[1].BindingId)
-	assert.False(t, relations[1].Enabled)
-	assert.Equal(t, int64(1), relations[1].AcceptedPriceVersion)
-	assert.Equal(t, "1.062", relations[1].AcceptedSaleRatio)
+	assert.True(t, relations[0].Enabled)
 }
 
 func TestReplaceTokenGroupBindingsRejectsTooManyGroups(t *testing.T) {
@@ -220,11 +217,75 @@ func TestReplaceTokenGroupBindingsRejectsTooManyGroups(t *testing.T) {
 	err := DB.Transaction(func(tx *gorm.DB) error {
 		return ReplaceTokenGroupBindings(tx, token.Id, bindingIds)
 	})
-	require.ErrorContains(t, err, "must not exceed")
+	assert.ErrorIs(t, err, ErrTokenGroupLimitExceeded)
 
 	var count int64
 	require.NoError(t, DB.Model(&TokenGroupBinding{}).Where("token_id = ?", token.Id).Count(&count).Error)
 	assert.Zero(t, count)
+}
+
+// A token left over from the era of multi-group bindings must never route: any
+// one of its bindings could bill the user against a channel they did not pick.
+func TestListTokenGroupBindingViewsFailsClosedOnMultipleBindings(t *testing.T) {
+	setupUpstreamGroupTestDB(t)
+	groups := []UpstreamGroupBinding{
+		{Identity: "newapi:multi:a", LocalGroup: "uo-multi-a", DesiredEnabled: true, State: UpstreamGroupStateActive, SourceRatio: "1", SaleRatio: "1.18", PriceVersion: 1},
+		{Identity: "newapi:multi:b", LocalGroup: "uo-multi-b", DesiredEnabled: true, State: UpstreamGroupStateActive, SourceRatio: "1", SaleRatio: "1.18", PriceVersion: 1},
+	}
+	require.NoError(t, DB.Create(&groups).Error)
+	token := Token{UserId: 1, Name: "legacy", Key: "legacy-multi-key"}
+	require.NoError(t, DB.Create(&token).Error)
+	// Bypass ReplaceTokenGroupBindings: the current limit would reject this.
+	for position, group := range groups {
+		require.NoError(t, DB.Create(&TokenGroupBinding{
+			TokenId:              token.Id,
+			BindingId:            group.Id,
+			Position:             position,
+			Enabled:              true,
+			AcceptedPriceVersion: group.PriceVersion,
+			AcceptedSourceRatio:  group.SourceRatio,
+			AcceptedSaleRatio:    group.SaleRatio,
+		}).Error)
+	}
+
+	views, err := ListTokenGroupBindingViews(token.Id)
+	require.NoError(t, err)
+	require.Len(t, views, 2)
+	for _, view := range views {
+		assert.Equal(t, TokenGroupStateMultipleBindings, view.State)
+		assert.False(t, view.EffectiveEnabled)
+	}
+}
+
+func TestMarkMissingUpstreamGroupsRequiresCompleteSnapshot(t *testing.T) {
+	setupUpstreamGroupTestDB(t)
+	channelId := 4242
+	group := UpstreamGroupBinding{
+		Identity:          fmt.Sprintf("newapi:%d:pro", channelId),
+		UpstreamChannelId: int64(channelId),
+		LocalGroup:        "uo-mark-pro",
+		DesiredEnabled:    true,
+		State:             UpstreamGroupStateActive,
+		LocalChannelId:    common.GetPointer(9001),
+	}
+	require.NoError(t, DB.Create(&group).Error)
+
+	// An incomplete listing (upstream hiccup, empty snapshot) is not evidence
+	// that a group disappeared, so nothing may be retired.
+	missing, err := MarkMissingUpstreamGroups(int64(channelId), nil, false)
+	require.NoError(t, err)
+	assert.Empty(t, missing)
+
+	var reloaded UpstreamGroupBinding
+	require.NoError(t, DB.First(&reloaded, "id = ?", group.Id).Error)
+	assert.Equal(t, UpstreamGroupStateActive, reloaded.State)
+
+	// A complete listing that omits the group really did lose it.
+	missing, err = MarkMissingUpstreamGroups(int64(channelId), []string{"newapi:4242:other"}, true)
+	require.NoError(t, err)
+	require.Len(t, missing, 1)
+	require.NoError(t, DB.First(&reloaded, "id = ?", group.Id).Error)
+	assert.Equal(t, UpstreamGroupStateGroupRemoved, reloaded.State)
 }
 
 func TestRecordUpstreamChannelSyncTransitionOnlyRecordsChanges(t *testing.T) {

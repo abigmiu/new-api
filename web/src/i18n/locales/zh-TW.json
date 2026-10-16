@@ -5356,6 +5356,12 @@
     "Zero retention": "零數據保留",
     "Zhipu": "智譜",
     "Zhipu V4": "智譜 V4",
-    "Zoom": "縮放"
+    "Zoom": "縮放",
+    "Select one managed channel": "只能選擇一個託管管道",
+    "Channel removed": "管道已被移除",
+    "This key was bound to multiple channels; only the first is kept": "該金鑰曾綁定多個管道，儲存時僅保留第一個",
+    "The channel price has changed, please re-enable": "管道價格變化，請重新啟用",
+    "This channel has been removed": "該管道已被移除",
+    "This channel is currently unavailable, please contact the administrator": "該管道目前不可用，請聯絡管理員"
   }
 }

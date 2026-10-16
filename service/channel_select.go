@@ -87,9 +87,19 @@ func CacheGetRandomSatisfiedChannel(param *RetryParam) (*model.Channel, string, 
 	userGroup := common.GetContextKeyString(param.Ctx, constant.ContextKeyUserGroup)
 
 	if tokenGroups, managed := GetRequestTokenGroups(param.Ctx); managed {
-		if len(tokenGroups) == 0 {
-			return nil, selectGroup, errors.New("token groups are unavailable")
+		// Same decision table the auth middleware applies, so a request that
+		// slips past the early rejection (or arrives with a token disabled after
+		// auth) still reports the identical reason to the key owner.
+		decision := TokenGroupRoutingUnavailable
+		if len(tokenGroups) > 0 {
+			decision = EvaluateTokenGroupRouting(tokenGroups[0])
 		}
+		if decision != TokenGroupRoutingActive {
+			return nil, selectGroup, &TokenGroupUnavailableError{Decision: decision}
+		}
+		// A token binds at most one managed group, so this loop runs once. It is
+		// kept as a loop because ContextKeyTokenGroupIndex is advanced for
+		// retries within the same (single) group.
 		startGroupIndex := common.GetContextKeyInt(param.Ctx, constant.ContextKeyTokenGroupIndex)
 		for i := startGroupIndex; i < len(tokenGroups); i++ {
 			group := tokenGroups[i]

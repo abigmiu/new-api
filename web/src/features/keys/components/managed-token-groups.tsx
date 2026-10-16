@@ -25,6 +25,7 @@ import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 
 import { acceptTokenGroupPrice, disableTokenGroup } from '../api'
+import { managedGroupStatus } from '../lib/managed-group-status'
 import type { ApiKey } from '../types'
 
 type ManagedTokenGroupsProps = {
@@ -32,20 +33,6 @@ type ManagedTokenGroupsProps = {
   groups: NonNullable<ApiKey['groups']>
   onChanged: () => Promise<unknown>
 }
-
-const STATUS_VARIANTS = {
-  active: 'success',
-  price_changed: 'warning',
-  group_unavailable: 'danger',
-  user_disabled: 'neutral',
-} as const
-
-const STATUS_LABELS = {
-  active: 'Active',
-  price_changed: 'Price changed',
-  group_unavailable: 'Unavailable',
-  user_disabled: 'Disabled for this key',
-} as const
 
 export function ManagedTokenGroups(props: ManagedTokenGroupsProps) {
   const { t } = useTranslation()
@@ -73,71 +60,74 @@ export function ManagedTokenGroups(props: ManagedTokenGroupsProps) {
 
   return (
     <div className='space-y-2'>
-      {props.groups.map((group) => (
-        <div
-          key={group.binding_id}
-          className='flex min-w-0 items-center gap-3 rounded-md border px-3 py-2'
-        >
-          <div className='min-w-0 flex-1'>
-            <div className='flex min-w-0 flex-wrap items-center gap-2'>
-              <span className='truncate text-sm font-medium'>
-                {group.display_name}
-              </span>
-              <StatusBadge
-                label={t(STATUS_LABELS[group.state])}
-                variant={STATUS_VARIANTS[group.state]}
-                copyable={false}
-              />
-            </div>
-            <div className='text-muted-foreground mt-1 text-xs tabular-nums'>
-              {t('Accepted price')}: {group.accepted_sale_ratio}
-              {group.state === 'price_changed' && (
-                <span>
-                  {' -> '} {t('Current price')}: {group.current_sale_ratio}
+      {props.groups.map((group) => {
+        const status = managedGroupStatus(group)
+        return (
+          <div
+            key={group.binding_id}
+            className='flex min-w-0 items-center gap-3 rounded-md border px-3 py-2'
+          >
+            <div className='min-w-0 flex-1'>
+              <div className='flex min-w-0 flex-wrap items-center gap-2'>
+                <span className='truncate text-sm font-medium'>
+                  {group.display_name}
                 </span>
-              )}
+                <StatusBadge
+                  label={t(status.label)}
+                  variant={status.variant}
+                  copyable={false}
+                />
+              </div>
+              <div className='text-muted-foreground mt-1 text-xs tabular-nums'>
+                {t('Accepted price')}: {group.accepted_sale_ratio}
+                {group.state === 'price_changed' && (
+                  <span>
+                    {' -> '} {t('Current price')}: {group.current_sale_ratio}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-          {(group.state === 'price_changed' ||
-            group.state === 'user_disabled') && (
-            <Button
-              type='button'
-              size='sm'
-              disabled={pendingBindingId === group.binding_id}
-              onClick={() =>
-                updateGroup(group.binding_id, () =>
-                  acceptTokenGroupPrice(
-                    props.tokenId,
-                    group.binding_id,
-                    group.current_price_version
+            {(group.state === 'price_changed' ||
+              group.state === 'user_disabled') && (
+              <Button
+                type='button'
+                size='sm'
+                disabled={pendingBindingId === group.binding_id}
+                onClick={() =>
+                  updateGroup(group.binding_id, () =>
+                    acceptTokenGroupPrice(
+                      props.tokenId,
+                      group.binding_id,
+                      group.current_price_version
+                    )
                   )
-                )
-              }
-            >
-              <Check />
-              {group.state === 'price_changed'
-                ? t('Accept price')
-                : t('Enable for this key')}
-            </Button>
-          )}
-          {group.state === 'active' && (
-            <Button
-              type='button'
-              size='icon-sm'
-              variant='ghost'
-              aria-label={t('Disable for this key')}
-              disabled={pendingBindingId === group.binding_id}
-              onClick={() =>
-                updateGroup(group.binding_id, () =>
-                  disableTokenGroup(props.tokenId, group.binding_id)
-                )
-              }
-            >
-              <PowerOff />
-            </Button>
-          )}
-        </div>
-      ))}
+                }
+              >
+                <Check />
+                {group.state === 'price_changed'
+                  ? t('Accept price')
+                  : t('Enable for this key')}
+              </Button>
+            )}
+            {group.state === 'active' && (
+              <Button
+                type='button'
+                size='icon-sm'
+                variant='ghost'
+                aria-label={t('Disable for this key')}
+                disabled={pendingBindingId === group.binding_id}
+                onClick={() =>
+                  updateGroup(group.binding_id, () =>
+                    disableTokenGroup(props.tokenId, group.binding_id)
+                  )
+                }
+              >
+                <PowerOff />
+              </Button>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

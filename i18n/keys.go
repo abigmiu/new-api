@@ -326,6 +326,19 @@ const (
 	MsgDistributorInvalidParseModel       = "distributor.invalid_request_parse_model"
 )
 
+// Managed token group messages. These templates carry no interpolated data on
+// purpose: they are shown to the key owner, who must not learn which upstream
+// channel the operator runs, so nothing channel-identifying can ever leak
+// through them.
+const (
+	MsgTokenGroupPriceChanged      = "token_group.price_changed"
+	MsgTokenGroupChannelRemoved    = "token_group.channel_removed"
+	MsgTokenGroupUnavailable       = "token_group.unavailable"
+	MsgTokenGroupLimitExceeded     = "token_group.limit_exceeded"
+	MsgTokenGroupChannelNotAllowed = "token_group.channel_not_allowed"
+	MsgTokenGroupRequiresBinding   = "token_group.requires_binding"
+)
+
 // Custom OAuth provider related messages
 const (
 	MsgCustomOAuthNotFound          = "custom_oauth.not_found"

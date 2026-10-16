@@ -5356,6 +5356,12 @@
     "Zero retention": "Без хранения данных",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Select one managed channel": "Выберите один управляемый канал",
+    "Channel removed": "Канал удалён",
+    "This key was bound to multiple channels; only the first is kept": "Этот ключ был привязан к нескольким каналам; сохраняется только первый",
+    "The channel price has changed, please re-enable": "Цена канала изменилась, включите его заново",
+    "This channel has been removed": "Этот канал был удалён",
+    "This channel is currently unavailable, please contact the administrator": "Этот канал сейчас недоступен, обратитесь к администратору"
   }
 }

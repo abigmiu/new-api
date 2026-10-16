@@ -53,6 +53,32 @@ const { createInstance } = await import('i18next')
 const { I18nextProvider, initReactI18next } = await import('react-i18next')
 const { TooltipProvider } = await import('@/components/ui/tooltip')
 const { ApiKeyGroupCell } = await import('../api-key-group-cell')
+const { apiKeySchema } = await import('../../types')
+
+type ApiKey = import('../../types').ApiKey
+type ManagedGroup = NonNullable<ApiKey['groups']>[number]
+
+function parsedManagedGroup(group: Record<string, unknown>): ManagedGroup {
+  const parsed = apiKeySchema.safeParse({
+    id: 1,
+    name: 'managed',
+    key: 'sk-managed',
+    status: 1,
+    remain_quota: 0,
+    used_quota: 0,
+    unlimited_quota: true,
+    expired_time: -1,
+    created_time: 1,
+    accessed_time: 0,
+    model_limits_enabled: false,
+    groups: [group],
+  })
+  assert.equal(parsed.success, true)
+  if (!parsed.success) throw new Error('managed key fixture is invalid')
+  const groups = parsed.data.groups ?? []
+  assert.equal(groups.length, 1)
+  return groups[0]
+}
 
 const i18n = createInstance()
 await i18n.use(initReactI18next).init({
@@ -63,6 +89,11 @@ await i18n.use(initReactI18next).init({
         Auto: 'Auto',
         'Cross-group': 'Cross-group',
         Ratio: 'Ratio',
+        Active: 'Active',
+        'Price changed': 'Price changed',
+        'Disabled for this key': 'Disabled for this key',
+        'Channel removed': 'Channel removed',
+        Unavailable: 'Unavailable',
         'Automatically selects the best available group with circuit breaker mechanism':
           'Automatically selects the best available group with circuit breaker mechanism',
       },
@@ -80,6 +111,7 @@ function CellHarness(props: {
   ratio?: number | string
   crossGroupRetry?: boolean
   shouldReduceMotion?: boolean
+  groups?: NonNullable<ApiKey['groups']>
 }) {
   return (
     <I18nextProvider i18n={i18n}>
@@ -89,6 +121,7 @@ function CellHarness(props: {
           ratio={props.ratio}
           crossGroupRetry={props.crossGroupRetry ?? false}
           shouldReduceMotion={props.shouldReduceMotion ?? false}
+          groups={props.groups}
         />
       </TooltipProvider>
     </I18nextProvider>
@@ -200,6 +233,127 @@ describe('API key group table cell', () => {
     )
     assert.equal(container.textContent?.includes('Auto'), true)
     assert.equal(container.textContent?.includes('Ratio'), false)
+
+    await act(async () => root.unmount())
+    container.remove()
+  })
+
+  test('renders a single managed badge from the binding state and never a channel id', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    const renderGroups = async (group: ManagedGroup) => {
+      await act(async () =>
+        root.render(<CellHarness group='' groups={[group]} />)
+      )
+      return container.textContent ?? ''
+    }
+
+    assert.equal(
+      await renderGroups(
+        parsedManagedGroup({
+          binding_id: 1,
+          local_group: 'uo-7-x',
+          display_name: 'Managed 7',
+          position: 1,
+          enabled: true,
+          effective_enabled: true,
+          state: 'active',
+          accepted_price_version: 1,
+          current_price_version: 1,
+          accepted_source_ratio: '1',
+          accepted_sale_ratio: '1.15',
+          current_source_ratio: '1',
+          current_sale_ratio: '1.15',
+          global_state: 'active',
+          local_channel_id: 7,
+        })
+      ),
+      'Active'
+    )
+
+    assert.equal(
+      await renderGroups(
+        parsedManagedGroup({
+          binding_id: 1,
+          local_group: 'uo-7-x',
+          display_name: 'Managed 7',
+          position: 1,
+          enabled: false,
+          effective_enabled: false,
+          state: 'group_unavailable',
+          accepted_price_version: 2,
+          current_price_version: 2,
+          accepted_source_ratio: '1',
+          accepted_sale_ratio: '1.15',
+          current_source_ratio: '2',
+          current_sale_ratio: '2.3',
+          global_state: 'group_removed',
+          local_channel_id: 7,
+        })
+      ),
+      'Channel removed'
+    )
+
+    // The upstream key being rejected, the admin disabling the channel and a
+    // leftover multi-binding key all read the same way, so the badge never
+    // reveals which internal reason applies.
+    for (const globalState of [
+      'key_unavailable',
+      'admin_disabled',
+      'provisioning',
+    ]) {
+      assert.equal(
+        await renderGroups(
+          parsedManagedGroup({
+            binding_id: 1,
+            local_group: 'uo-7-x',
+            display_name: 'Managed 7',
+            position: 1,
+            enabled: true,
+            effective_enabled: false,
+            state: 'group_unavailable',
+            accepted_price_version: 2,
+            current_price_version: 2,
+            accepted_source_ratio: '1',
+            accepted_sale_ratio: '1.15',
+            current_source_ratio: '2',
+            current_sale_ratio: '2.3',
+            global_state: globalState,
+            local_channel_id: 7,
+          })
+        ),
+        'Unavailable'
+      )
+    }
+
+    assert.equal(
+      await renderGroups(
+        parsedManagedGroup({
+          binding_id: 1,
+          local_group: 'uo-7-x',
+          display_name: 'Managed 7',
+          position: 1,
+          enabled: true,
+          effective_enabled: false,
+          state: 'multiple_bindings',
+          accepted_price_version: 2,
+          current_price_version: 2,
+          accepted_source_ratio: '1',
+          accepted_sale_ratio: '1.15',
+          current_source_ratio: '2',
+          current_sale_ratio: '2.3',
+          global_state: 'active',
+          local_channel_id: 7,
+        })
+      ),
+      'Unavailable'
+    )
+
+    const text = container.textContent ?? ''
+    assert.equal(text.includes('Managed 7'), false)
+    assert.equal(text.includes('uo-7-x'), false)
 
     await act(async () => root.unmount())
     container.remove()

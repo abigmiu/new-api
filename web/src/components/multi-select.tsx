@@ -81,6 +81,12 @@ interface MultiSelectProps {
    * instead of being inert. The remove (×) button keeps its own behaviour.
    */
   copyChipOnClick?: boolean
+  /**
+   * Caps how many values may be selected at once. Picking a new value while the
+   * cap is reached replaces the existing selection, which reads better than an
+   * ignored click when the field is a single choice.
+   */
+  maxSelected?: number
 }
 
 const COMMA_REGEX = /[,，\n]/
@@ -207,6 +213,22 @@ export function MultiSelect(props: MultiSelectProps) {
     [props]
   )
 
+  // A typed/pasted value must respect the same cap as a picked one.
+  const commitValues = React.useCallback(
+    (values: string[]) => {
+      const limit =
+        props.maxSelected && props.maxSelected > 0
+          ? props.maxSelected
+          : undefined
+      if (limit && values.length > limit) {
+        props.onChange(values.slice(values.length - limit))
+        return
+      }
+      addValues(values)
+    },
+    [addValues, props]
+  )
+
   const handleInputValueChange = (value: string) => {
     if (!props.allowCreate) {
       setInputValue(value)
@@ -214,7 +236,7 @@ export function MultiSelect(props: MultiSelectProps) {
     }
     const parsed = splitDraft(value)
     if (parsed.completed.length > 0) {
-      addValues(parsed.completed)
+      commitValues(parsed.completed)
       setInputValue(parsed.draft)
       return
     }
@@ -222,11 +244,22 @@ export function MultiSelect(props: MultiSelectProps) {
   }
 
   const handleValueChange = (next: string[]) => {
-    props.onChange(next)
+    const limit =
+      props.maxSelected && props.maxSelected > 0
+        ? props.maxSelected
+        : undefined
+    // Base UI reports the full next selection; when the caller allows a single
+    // value, keep the most recently picked one — the oldest-first slice would
+    // drop the click the user just made.
+    const applied =
+      limit && next.length > limit
+        ? next.slice(next.length - limit)
+        : next
+    props.onChange(applied)
     // When an item is picked (multiple mode), Base UI keeps the input but most
     // UX patterns clear it. Clearing once a value is added makes batch picking
     // feel snappier and matches popular chip-style multiselects.
-    if (next.length > props.selected.length) {
+    if (applied.length > props.selected.length) {
       setInputValue('')
     }
   }
@@ -262,7 +295,7 @@ export function MultiSelect(props: MultiSelectProps) {
       const hasHighlight = popup?.querySelector('[data-highlighted]') != null
       if (!hasHighlight) {
         event.preventDefault()
-        addValues([trimmedInput])
+        commitValues([trimmedInput])
         setInputValue('')
       }
     }

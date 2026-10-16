@@ -47,24 +47,28 @@ func GetPricing(c *gin.Context) {
 
 	// 托管分组未注册进 GroupRatio/UserUsableGroups，其倍率只存在于活跃绑定上。
 	// 价目表需要展示全量分组，因此把这些倍率并入返回的 groupRatio 副本。
+	// 托管分组的键（uo-{渠道ID}-…）与展示名内嵌运营方的渠道编号，只对已认证
+	// 请求返回：本接口匿名可达，而匿名用户本来也无法使用托管分组。
 	managedGroups := make([]managedGroupOption, 0)
-	bindings, err := model.ListActiveUpstreamGroupBindings()
-	if err != nil {
-		logger.LogWarn(c.Request.Context(), fmt.Sprintf("获取托管分组失败，价目表将缺失托管分组倍率: %v", err))
-	}
-	for _, binding := range bindings {
-		saleRatio, parseErr := strconv.ParseFloat(binding.SaleRatio, 64)
-		if parseErr != nil || saleRatio <= 0 {
-			logger.LogWarn(c.Request.Context(), fmt.Sprintf("跳过倍率无效的托管分组 group=%s sale_ratio=%q error=%v", binding.LocalGroup, binding.SaleRatio, parseErr))
-			continue
+	if exists {
+		bindings, err := model.ListActiveUpstreamGroupBindings()
+		if err != nil {
+			logger.LogWarn(c.Request.Context(), fmt.Sprintf("获取托管分组失败，价目表将缺失托管分组倍率: %v", err))
 		}
-		groupRatio[binding.LocalGroup] = saleRatio
-		managedGroups = append(managedGroups, managedGroupOption{
-			Value:        binding.LocalGroup,
-			Label:        binding.LocalDisplayName,
-			SaleRatio:    binding.SaleRatio,
-			PriceVersion: binding.PriceVersion,
-		})
+		for _, binding := range bindings {
+			saleRatio, parseErr := strconv.ParseFloat(binding.SaleRatio, 64)
+			if parseErr != nil || saleRatio <= 0 {
+				logger.LogWarn(c.Request.Context(), fmt.Sprintf("跳过倍率无效的托管分组 group=%s sale_ratio=%q error=%v", binding.LocalGroup, binding.SaleRatio, parseErr))
+				continue
+			}
+			groupRatio[binding.LocalGroup] = saleRatio
+			managedGroups = append(managedGroups, managedGroupOption{
+				Value:        binding.LocalGroup,
+				Label:        binding.LocalDisplayName,
+				SaleRatio:    binding.SaleRatio,
+				PriceVersion: binding.PriceVersion,
+			})
+		}
 	}
 
 	c.JSON(200, gin.H{

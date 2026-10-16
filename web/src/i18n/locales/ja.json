@@ -5356,6 +5356,12 @@
     "Zero retention": "データ保持なし",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V 4",
-    "Zoom": "ズーム"
+    "Zoom": "ズーム",
+    "Select one managed channel": "管理チャネルを1つだけ選択してください",
+    "Channel removed": "チャネルが削除されました",
+    "This key was bound to multiple channels; only the first is kept": "このキーは複数のチャネルにバインドされていました。保存時は最初の1つだけが保持されます",
+    "The channel price has changed, please re-enable": "チャネルの価格が変更されました。再度有効にしてください",
+    "This channel has been removed": "このチャネルは削除されました",
+    "This channel is currently unavailable, please contact the administrator": "このチャネルは現在利用できません。管理者にお問い合わせください"
   }
 }

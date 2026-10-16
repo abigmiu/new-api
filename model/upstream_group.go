@@ -1,16 +1,18 @@
 package model
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/shopspring/decimal"
 	"gorm.io/gorm"
 )
 
 const (
-	MaxTokenManagedGroups            = 20
+	MaxTokenManagedGroups            = 1
 	UpstreamGroupStateDiscovered     = "discovered"
 	UpstreamGroupStateProvisioning   = "provisioning"
 	UpstreamGroupStateActive         = "active"
@@ -19,6 +21,12 @@ const (
 	UpstreamGroupStateKeyUnavailable = "key_unavailable"
 	UpstreamGroupStateError          = "error"
 )
+
+// TokenGroupStateMultipleBindings is a view-only state. A token bound to more
+// than one managed channel is a leftover from an older build: it is reported as
+// unavailable instead of routing to any of its bindings, so a key can never be
+// billed against a channel its owner did not knowingly select.
+const TokenGroupStateMultipleBindings = "multiple_bindings"
 
 type UpstreamGroupBinding struct {
 	Id                  int64  `json:"id"`
@@ -88,6 +96,7 @@ type TokenGroupBindingView struct {
 	AcceptedSaleRatio    string `json:"accepted_sale_ratio"`
 	CurrentSourceRatio   string `json:"current_source_ratio"`
 	CurrentSaleRatio     string `json:"current_sale_ratio"`
+	GlobalState          string `json:"global_state"`
 	LocalChannelId       *int   `json:"local_channel_id,omitempty"`
 }
 
@@ -239,8 +248,25 @@ func ListTokenGroupBindingViewsBatch(tokenIds []int) (map[int][]TokenGroupBindin
 			AcceptedSaleRatio:    row.AcceptedSaleRatio,
 			CurrentSourceRatio:   row.CurrentSource,
 			CurrentSaleRatio:     row.CurrentSale,
+			GlobalState:          row.GlobalState,
 			LocalChannelId:       row.LocalChannelId,
 		})
+	}
+	for tokenId, views := range viewsByToken {
+		if len(views) <= 1 {
+			continue
+		}
+		// Legacy token with several bindings: fail closed. Routing to any one of
+		// them would silently bill the user against a channel they may not have
+		// chosen, so every binding is reported unavailable until the operator
+		// rewrites the token. This runs after the state switch because the switch
+		// can only mark a binding price_changed while its channel is globally
+		// active.
+		for i := range views {
+			views[i].EffectiveEnabled = false
+			views[i].State = TokenGroupStateMultipleBindings
+		}
+		logger.LogWarn(context.Background(), fmt.Sprintf("token %d has %d managed group bindings; all of them are unavailable until the operator re-saves the key", tokenId, len(views)))
 	}
 	return viewsByToken, nil
 }
@@ -259,7 +285,7 @@ func ReplaceTokenGroupBindings(tx *gorm.DB, tokenId int, bindingIds []int64) err
 		return tx.Where("token_id = ?", tokenId).Delete(&TokenGroupBinding{}).Error
 	}
 	if len(bindingIds) > MaxTokenManagedGroups {
-		return fmt.Errorf("token groups must not exceed %d", MaxTokenManagedGroups)
+		return ErrTokenGroupLimitExceeded
 	}
 	seen := make(map[int64]struct{}, len(bindingIds))
 	for _, bindingId := range bindingIds {
@@ -423,6 +449,10 @@ func SetTokenGroupEnabled(tokenId int, userId int, bindingId int64, enabled bool
 
 var ErrUpstreamGroupPriceChanged = errors.New("upstream group price version changed")
 
+// ErrTokenGroupLimitExceeded is returned when a token is asked to bind more
+// managed groups than MaxTokenManagedGroups. Callers translate it for the user.
+var ErrTokenGroupLimitExceeded = fmt.Errorf("token groups must not exceed %d", MaxTokenManagedGroups)
+
 type UpstreamGroupObservation struct {
 	Identity            string
 	UpstreamChannelId   int64
@@ -537,7 +567,16 @@ func ApplyUpstreamGroupObservation(observation UpstreamGroupObservation) (*Upstr
 	return &result, created, priceChanged, nil
 }
 
-func MarkMissingUpstreamGroups(channelId int64, seenIdentities []string) ([]UpstreamGroupBinding, error) {
+// MarkMissingUpstreamGroups marks active groups of a channel that were absent
+// from the latest snapshot as removed. complete reports whether the snapshot
+// really enumerated the channel's groups: an empty snapshot is not evidence
+// that every group disappeared, and treating it as such would render the
+// channel's groups "removed" (and disable their local channel) on a single
+// upstream hiccup. Callers pass complete=true only after a successful listing.
+func MarkMissingUpstreamGroups(channelId int64, seenIdentities []string, complete bool) ([]UpstreamGroupBinding, error) {
+	if !complete {
+		return nil, nil
+	}
 	query := DB.Where("upstream_channel_id = ? AND desired_enabled = ? AND state = ?", channelId, true, UpstreamGroupStateActive)
 	if len(seenIdentities) > 0 {
 		query = query.Where("identity NOT IN ?", seenIdentities)

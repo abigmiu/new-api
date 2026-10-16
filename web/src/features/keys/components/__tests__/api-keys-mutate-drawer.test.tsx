@@ -135,7 +135,7 @@ function installApiFixtures(createdPayloads: Array<Record<string, unknown>>) {
                 price_version: 1,
                 sale_ratio: `1.${index + 1}`,
               })),
-              max_count: 10,
+              max_count: 1,
             },
           },
         }
@@ -229,7 +229,7 @@ async function renderCreateDrawer(): Promise<void> {
           price_version: 1,
           sale_ratio: `1.${index + 1}`,
         })),
-        max_count: 10,
+        max_count: 1,
       },
     },
     { updatedAt: freshAt }
@@ -419,7 +419,7 @@ describe('API keys mutate drawer Auto group integration', () => {
     assert.deepEqual(createdPayloads[0]?.auto_groups, ['vip'])
   })
 
-  test('submits only three selected managed groups out of ten options', async () => {
+  test('keeps only the last picked managed group when the operator binds one channel', async () => {
     const createdPayloads: Array<Record<string, unknown>> = []
     installApiFixtures(createdPayloads)
     await renderCreateDrawer()
@@ -439,7 +439,6 @@ describe('API keys mutate drawer Auto group integration', () => {
     for (const [label, description, ratio] of [
       ['Managed 2', 'Managed group 2', '1.2x'],
       ['Managed 5', 'Managed group 5', '1.5x'],
-      ['Managed 9', 'Managed group 9', '1.9x'],
     ]) {
       await act(async () => {
         selector.focus()
@@ -478,6 +477,14 @@ describe('API keys mutate drawer Auto group integration', () => {
       await act(async () => option.click())
     }
 
+    // Picking a second channel must replace the first: a key binds exactly one
+    // managed channel, so the field can never hold two.
+    assert.equal(
+      document.body.textContent?.includes('1 / 1 groups selected'),
+      true,
+      'Expected the selection counter to report a single bound channel'
+    )
+
     await changeInput(getControlByLabel<HTMLInputElement>('Name'), 'managed')
     await act(async () => findButton('Save changes', true).click())
     await act(async () =>
@@ -487,7 +494,7 @@ describe('API keys mutate drawer Auto group integration', () => {
       )
     )
 
-    assert.deepEqual(createdPayloads[0]?.groups, [2, 5, 9])
+    assert.deepEqual(createdPayloads[0]?.groups, [5])
     assert.equal(createdPayloads[0]?.group, '')
   })
 

@@ -56,6 +56,29 @@ const baseApiKey: ApiKey = {
   allow_ips: '',
 }
 
+function managedGroup(
+  position: number,
+  state: NonNullable<ApiKey['groups']>[number]['state']
+): NonNullable<ApiKey['groups']>[number] {
+  return {
+    binding_id: position,
+    local_group: `uo-${position}`,
+    display_name: `Managed ${position}`,
+    position,
+    enabled: true,
+    effective_enabled: state === 'active',
+    state,
+    accepted_price_version: 1,
+    current_price_version: 1,
+    accepted_source_ratio: '1',
+    accepted_sale_ratio: '1.15',
+    current_source_ratio: '1',
+    current_sale_ratio: '1.15',
+    global_state: 'active',
+    local_channel_id: position,
+  }
+}
+
 describe('API key Auto group form mapping', () => {
   test('treats legacy token responses without auto_groups as inheritance', () => {
     const legacyApiKey: Record<string, unknown> = { ...baseApiKey }
@@ -186,6 +209,34 @@ describe('API key Auto group form mapping', () => {
     if (result.success) return
     assert.deepEqual(result.error.issues[0]?.path, ['group'])
     assert.equal(result.error.issues[0]?.message, 'Please select a group')
+  })
+
+  test('rejects a token bound to two managed channels', () => {
+    const result = getApiKeyFormSchema(t).safeParse({
+      ...getApiKeyFormDefaultValues(false),
+      routing_mode: 'managed',
+      name: 'two-channel token',
+      groups: [1, 2],
+    })
+
+    assert.equal(result.success, false)
+    if (result.success) return
+    assert.deepEqual(result.error.issues[0]?.path, ['groups'])
+    assert.equal(result.error.issues[0]?.message, 'Select one managed channel')
+  })
+
+  test('keeps only the first managed channel of a legacy multi-binding key', () => {
+    const defaults = transformApiKeyToFormDefaults({
+      ...baseApiKey,
+      groups: [
+        managedGroup(1, 'active'),
+        managedGroup(2, 'active'),
+        managedGroup(3, 'price_changed'),
+      ],
+    })
+
+    assert.equal(defaults.routing_mode, 'managed')
+    assert.deepEqual(defaults.groups, [1])
   })
 
   test('rejects snapshots over the configured limit', () => {

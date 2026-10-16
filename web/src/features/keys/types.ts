@@ -49,6 +49,7 @@ export const apiKeySchema = z.object({
           'price_changed',
           'group_unavailable',
           'user_disabled',
+          'multiple_bindings',
         ]),
         accepted_price_version: z.number(),
         current_price_version: z.number(),
@@ -56,6 +57,7 @@ export const apiKeySchema = z.object({
         accepted_sale_ratio: z.string(),
         current_source_ratio: z.string(),
         current_sale_ratio: z.string(),
+        global_state: z.string().optional(),
         local_channel_id: z.number().nullish(),
       })
     )

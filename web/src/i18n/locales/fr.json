@@ -5356,6 +5356,12 @@
     "Zero retention": "Aucune rétention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Select one managed channel": "Sélectionnez un seul canal géré",
+    "Channel removed": "Canal supprimé",
+    "This key was bound to multiple channels; only the first is kept": "Cette clé était liée à plusieurs canaux ; seul le premier est conservé",
+    "The channel price has changed, please re-enable": "Le prix du canal a changé, veuillez le réactiver",
+    "This channel has been removed": "Ce canal a été supprimé",
+    "This channel is currently unavailable, please contact the administrator": "Ce canal est actuellement indisponible, veuillez contacter l'administrateur"
   }
 }

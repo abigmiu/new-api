@@ -77,6 +77,8 @@ const (
 	ErrorCodeAwsInvokeError         ErrorCode = "aws_invoke_error"
 	ErrorCodeModelNotFound          ErrorCode = "model_not_found"
 	ErrorCodeTokenGroupUnavailable  ErrorCode = "token_group_unavailable"
+	ErrorCodeTokenGroupPriceChanged ErrorCode = "token_group_price_changed"
+	ErrorCodeTokenGroupRemoved      ErrorCode = "token_group_removed"
 	ErrorCodePromptBlocked          ErrorCode = "prompt_blocked"
 
 	// sql error

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -35,7 +36,8 @@ func TestCalculateUpstreamGroupSaleRatioMarkupWithinRange(t *testing.T) {
 
 	seen := make(map[string]struct{})
 	for i := 0; i < 200; i++ {
-		got, err := CalculateUpstreamGroupSaleRatio("1")
+		identity := fmt.Sprintf("newapi:1:%d", i)
+		got, err := CalculateUpstreamGroupSaleRatio("1", identity)
 		require.NoError(t, err)
 
 		value, err := decimal.NewFromString(got)
@@ -46,12 +48,31 @@ func TestCalculateUpstreamGroupSaleRatioMarkupWithinRange(t *testing.T) {
 		seen[got] = struct{}{}
 	}
 
-	assert.Greater(t, len(seen), 1, "markup should vary between calls")
+	assert.Greater(t, len(seen), 1, "markup should vary between identities")
+}
+
+// The sync re-derives the sale ratio on every run, so the markup must be a pure
+// function of the group identity: otherwise the user's price drifts while the
+// upstream price stands still.
+func TestCalculateUpstreamGroupSaleRatioIsStablePerIdentity(t *testing.T) {
+	first, err := CalculateUpstreamGroupSaleRatio("0.075", "newapi:1:pro")
+	require.NoError(t, err)
+	for i := 0; i < 20; i++ {
+		again, err := CalculateUpstreamGroupSaleRatio("0.075", "newapi:1:pro")
+		require.NoError(t, err)
+		assert.Equal(t, first, again)
+	}
+
+	// A different source ratio for the same group changes the price, but the
+	// markup applied is the group's own, so the sale ratio stays proportional.
+	raised, err := CalculateUpstreamGroupSaleRatio("0.150", "newapi:1:pro")
+	require.NoError(t, err)
+	assert.NotEqual(t, first, raised)
 }
 
 func TestCalculateUpstreamGroupSaleRatioRejectsInvalidValue(t *testing.T) {
 	for _, source := range []string{"", "0", "-1", "invalid"} {
-		_, err := CalculateUpstreamGroupSaleRatio(source)
+		_, err := CalculateUpstreamGroupSaleRatio(source, "newapi:1:pro")
 		assert.Error(t, err)
 	}
 }

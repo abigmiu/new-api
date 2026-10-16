@@ -82,7 +82,6 @@ func Distribute() func(c *gin.Context) {
 					abortWithOpenAiMessage(c, http.StatusBadRequest, i18n.T(c, i18n.MsgDistributorModelNameRequired))
 					return
 				}
-				var selectGroup string
 				usingGroup := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
 				_, managedTokenGroups := service.GetRequestTokenGroups(c)
 				// check path is /pg/chat/completions
@@ -106,7 +105,6 @@ func Distribute() func(c *gin.Context) {
 				if !managedTokenGroups {
 					if preferred, found := getUserPreferredChannel(c, modelRequest.Model, usingGroup); found {
 						channel = preferred
-						selectGroup = usingGroup
 						common.SetContextKey(c, constant.ContextKeyUserPreferredChannel, true)
 					}
 				}
@@ -122,7 +120,6 @@ func Distribute() func(c *gin.Context) {
 								autoGroups := service.GetRequestAutoGroups(c, userGroup)
 								for _, g := range autoGroups {
 									if model.IsChannelEnabledForGroupModel(g, modelRequest.Model, preferred.Id) {
-										selectGroup = g
 										common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
 										channel = preferred
 										affinityUsable = true
@@ -132,7 +129,6 @@ func Distribute() func(c *gin.Context) {
 								}
 							} else if model.IsChannelEnabledForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
 								channel = preferred
-								selectGroup = usingGroup
 								affinityUsable = true
 								service.MarkChannelAffinityUsed(c, usingGroup, preferred.Id)
 							}
@@ -144,7 +140,7 @@ func Distribute() func(c *gin.Context) {
 				}
 
 				if channel == nil {
-					channel, selectGroup, err = service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
+					channel, _, err = service.CacheGetRandomSatisfiedChannel(&service.RetryParam{
 						Ctx:         c,
 						ModelName:   modelRequest.Model,
 						TokenGroup:  usingGroup,
@@ -152,32 +148,30 @@ func Distribute() func(c *gin.Context) {
 						Retry:       common.GetPointer(0),
 					})
 					if err != nil {
-						showGroup := usingGroup
 						if managedTokenGroups {
-							showGroup = selectGroup
+							// A managed key must never learn which channel serves
+							// it, so the reason is re-derived from the binding
+							// instead of from err or usingGroup.
+							abortManagedTokenGroupFailure(c)
+							return
 						}
-						if usingGroup == "auto" {
-							showGroup = fmt.Sprintf("auto(%s)", selectGroup)
-						}
-						message := i18n.T(c, i18n.MsgDistributorGetChannelFailed, map[string]any{"Group": showGroup, "Model": modelRequest.Model, "Error": err.Error()})
+						message := i18n.T(c, i18n.MsgDistributorGetChannelFailed, map[string]any{"Group": usingGroup, "Model": modelRequest.Model, "Error": err.Error()})
 						// 如果错误，但是渠道不为空，说明是数据库一致性问题
 						//if channel != nil {
 						//	common.SysError(fmt.Sprintf("渠道不存在：%d", channel.Id))
 						//	message = "数据库一致性已被破坏，请联系管理员"
 						//}
-						errorCode := types.ErrorCodeModelNotFound
-						if managedTokenGroups {
-							errorCode = types.ErrorCodeTokenGroupUnavailable
-						}
-						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, message, errorCode)
+						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, message, types.ErrorCodeModelNotFound)
 						return
 					}
 					if channel == nil {
-						errorCode := types.ErrorCodeModelNotFound
 						if managedTokenGroups {
-							errorCode = types.ErrorCodeTokenGroupUnavailable
+							// The group is usable but has no channel serving this
+							// model; the binding still must not be named.
+							abortManagedTokenGroupFailure(c)
+							return
 						}
-						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), errorCode)
+						abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgDistributorNoAvailableChannel, map[string]any{"Group": usingGroup, "Model": modelRequest.Model}), types.ErrorCodeModelNotFound)
 						return
 					}
 				}
@@ -189,6 +183,27 @@ func Distribute() func(c *gin.Context) {
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
 		}
+	}
+}
+
+// abortManagedTokenGroupFailure rejects a managed key that could not be routed.
+// It re-derives the reason from the binding so the status code and error code
+// match what the auth middleware would have returned, and it renders
+// interpolation-free messages so nothing about the operator's channel — no
+// group key, no upstream error text — reaches the key owner.
+func abortManagedTokenGroupFailure(c *gin.Context) {
+	tokenGroups, _ := service.GetRequestTokenGroups(c)
+	decision := service.TokenGroupRoutingUnavailable
+	if len(tokenGroups) > 0 {
+		decision = service.EvaluateTokenGroupRouting(tokenGroups[0])
+	}
+	switch decision {
+	case service.TokenGroupRoutingPriceChanged:
+		abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgTokenGroupPriceChanged), types.ErrorCodeTokenGroupPriceChanged)
+	case service.TokenGroupRoutingChannelRemoved:
+		abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgTokenGroupChannelRemoved), types.ErrorCodeTokenGroupRemoved)
+	default:
+		abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgTokenGroupUnavailable), types.ErrorCodeTokenGroupUnavailable)
 	}
 }
 

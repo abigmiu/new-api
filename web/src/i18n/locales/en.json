@@ -5356,6 +5356,12 @@
     "Zero retention": "Zero retention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Select one managed channel": "Select one managed channel",
+    "Channel removed": "Channel removed",
+    "This key was bound to multiple channels; only the first is kept": "This key was bound to multiple channels; only the first is kept",
+    "The channel price has changed, please re-enable": "The channel price has changed, please re-enable",
+    "This channel has been removed": "This channel has been removed",
+    "This channel is currently unavailable, please contact the administrator": "This channel is currently unavailable, please contact the administrator"
   }
 }

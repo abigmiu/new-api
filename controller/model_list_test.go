@@ -493,6 +493,32 @@ func TestListModelsTokenLimitUsesResolvedCustomAutoGroups(t *testing.T) {
 	require.Empty(t, anthropicResponse.LastID)
 }
 
+func TestListModelsResolvesManagedTokenGroups(t *testing.T) {
+	withSelfUseModeEnabled(t)
+	db := setupModelListControllerTestDB(t)
+
+	// A managed key carries no group of its own on the token record; the group
+	// that must be priced and listed is the binding's local mirror group.
+	require.NoError(t, db.Create(&[]model.Ability{
+		{Group: "uo-501-9001", Model: "zz-managed-model", ChannelId: 501, Enabled: true},
+		{Group: "uo-501-9001", Model: "zz-managed-disabled-model", ChannelId: 501, Enabled: false},
+		{Group: "default", Model: "zz-personal-group-model", ChannelId: 1, Enabled: true},
+	}).Error)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	ctx.Request = httptest.NewRequest(http.MethodGet, "/v1/models", nil)
+	common.SetContextKey(ctx, constant.ContextKeyUserGroup, "default")
+	common.SetContextKey(ctx, constant.ContextKeyTokenGroups, []model.TokenGroupBindingView{
+		{LocalGroup: "uo-501-9001", EffectiveEnabled: true, State: "active"},
+	})
+
+	ListModels(ctx, constant.ChannelTypeOpenAI)
+
+	ids := decodeListModelsResponse(t, recorder)
+	require.Equal(t, map[string]struct{}{"zz-managed-model": {}}, ids)
+}
+
 func TestCheckUpdatePasswordRequiresCurrentPassword(t *testing.T) {
 	db := setupModelListControllerTestDB(t)
 	hashedPassword, err := common.Password2Hash("CurrentPassword123")

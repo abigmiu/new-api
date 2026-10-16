@@ -465,13 +465,27 @@ func TokenAuth() func(c *gin.Context) {
 		}
 		if len(tokenGroups) > 0 {
 			if len(parts) > 1 {
-				abortWithOpenAiMessage(c, http.StatusForbidden, "托管分组令牌不支持指定渠道", types.ErrorCodeAccessDenied)
+				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgTokenGroupChannelNotAllowed), types.ErrorCodeAccessDenied)
+				return
+			}
+			// A managed key routes to exactly one channel, so its usability is
+			// decided here instead of being re-derived by every downstream
+			// layer. The messages carry no channel data by construction.
+			switch service.EvaluateTokenGroupRouting(tokenGroups[0]) {
+			case service.TokenGroupRoutingPriceChanged:
+				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgTokenGroupPriceChanged), types.ErrorCodeTokenGroupPriceChanged)
+				return
+			case service.TokenGroupRoutingChannelRemoved:
+				abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgTokenGroupChannelRemoved), types.ErrorCodeTokenGroupRemoved)
+				return
+			case service.TokenGroupRoutingUnavailable:
+				abortWithOpenAiMessage(c, http.StatusServiceUnavailable, i18n.T(c, i18n.MsgTokenGroupUnavailable), types.ErrorCodeTokenGroupUnavailable)
 				return
 			}
 			common.SetContextKey(c, constant.ContextKeyTokenGroups, tokenGroups)
 			tokenGroup = ""
 		} else if strings.HasPrefix(tokenGroup, "uo-") {
-			abortWithOpenAiMessage(c, http.StatusForbidden, "托管分组必须通过令牌分组授权访问", types.ErrorCodeAccessDenied)
+			abortWithOpenAiMessage(c, http.StatusForbidden, i18n.T(c, i18n.MsgTokenGroupRequiresBinding), types.ErrorCodeAccessDenied)
 			return
 		}
 		if tokenGroup != "" {

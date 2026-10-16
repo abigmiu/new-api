@@ -187,6 +187,22 @@ func getModelListGroups(c *gin.Context) (modelListGroups, error) {
 		}
 	}
 
+	// A managed key's group never appears in the token's own group field — it is
+	// resolved from the binding at request time — so without this branch the
+	// model list would be computed against the user's personal groups and come
+	// back empty.
+	if tokenGroups, managed := service.GetRequestTokenGroups(c); managed {
+		ownerGroups := make([]string, 0, len(tokenGroups))
+		for _, group := range tokenGroups {
+			ownerGroups = append(ownerGroups, group.LocalGroup)
+		}
+		return modelListGroups{
+			userGroup:   userGroup,
+			tokenGroup:  tokenGroup,
+			ownerGroups: ownerGroups,
+		}, nil
+	}
+
 	if tokenGroup == "auto" {
 		return modelListGroups{
 			userGroup:   userGroup,

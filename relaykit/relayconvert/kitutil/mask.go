@@ -12,6 +12,12 @@ var (
 	maskIPPattern     = regexp.MustCompile(`\b(?:\d{1,3}\.){3}\d{1,3}\b`)
 	// maskApiKeyPattern matches patterns like 'api_key:xxx' or "api_key:xxx" to mask the API key value
 	maskApiKeyPattern = regexp.MustCompile(`(['"]?)api_key:([^\s'"]+)(['"]?)`)
+	// maskManagedGroupPattern matches the operator-internal group key format
+	// uo-{channel_id}-{suffix} (see the upstream group sync in the host module).
+	// It has neither a dot nor a scheme, so the URL/domain patterns above leave
+	// it untouched; masking it here is a backstop, not the primary guarantee —
+	// messages shown to key owners must not carry it in the first place.
+	maskManagedGroupPattern = regexp.MustCompile(`\buo-\d+-[A-Za-z0-9]+\b`)
 )
 
 // maskHostTail returns the tail parts of a domain/host that should be preserved.
@@ -129,6 +135,9 @@ func MaskSensitiveInfo(str string) string {
 
 	// Mask API keys (e.g., "api_key:AIzaSyAAAaUooTUni8AdaOkSRMda30n_Q4vrV70" -> "api_key:***")
 	str = maskApiKeyPattern.ReplaceAllString(str, "${1}api_key:***${3}")
+
+	// Mask operator-internal managed group keys (e.g. uo-12-ab12cd -> uo-***)
+	str = maskManagedGroupPattern.ReplaceAllString(str, "uo-***")
 
 	return str
 }

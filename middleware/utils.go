@@ -15,15 +15,19 @@ func abortWithOpenAiMessage(c *gin.Context, statusCode int, message string, code
 		codeStr = string(code[0])
 	}
 	userId := c.GetInt("id")
+	// Backstop only: messages reaching the key owner must not contain channel
+	// identities to begin with, so call sites are expected to render
+	// interpolation-free templates for anything managed-channel related.
+	safeMessage := common.MaskSensitiveInfo(message)
 	c.JSON(statusCode, gin.H{
 		"error": gin.H{
-			"message": common.MessageWithRequestId(message, c.GetString(common.RequestIdKey)),
+			"message": common.MessageWithRequestId(safeMessage, c.GetString(common.RequestIdKey)),
 			"type":    "new_api_error",
 			"code":    codeStr,
 		},
 	})
 	c.Abort()
-	logger.LogError(c.Request.Context(), fmt.Sprintf("user %d | %s", userId, message))
+	logger.LogError(c.Request.Context(), fmt.Sprintf("user %d | %s", userId, safeMessage))
 }
 
 func abortWithMidjourneyMessage(c *gin.Context, statusCode int, code int, description string) {

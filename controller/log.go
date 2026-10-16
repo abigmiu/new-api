@@ -3,6 +3,7 @@ package controller
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/model"
@@ -175,7 +176,14 @@ func anonymizeUserLogs(logs []*model.Log) ([]userLogResponse, error) {
 			if err != nil {
 				return nil, err
 			}
-			displayName = log.Group + "-" + alias
+			if strings.HasPrefix(log.Group, "uo-") {
+				// A managed group key embeds the operator's channel number, which
+				// the log owner must not see; the alias alone is enough to tell
+				// repeated channels apart.
+				displayName = alias
+			} else {
+				displayName = log.Group + "-" + alias
+			}
 		}
 		copy.ChannelId = 0
 		copy.ChannelName = ""
